@@ -6,95 +6,51 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 dotenv.config();
 
-// S3 Client
+// AWS S3 Client
 const s3 = new S3Client({
     region: process.env.S3_REGION,
     credentials: {
-        accessKeyId: String(process.env.S3_ACCESS_KEY).trim(),
-        secretAccessKey: String(process.env.S3_SECRET_KEY).trim()
+        accessKeyId: process.env.S3_ACCESS_KEY,
+        secretAccessKey: process.env.S3_SECRET_KEY
     }
 });
 
-// Map fields → S3 folder
-const getS3Folder = (fieldname) => {
-    switch (fieldname) {
-        case "category_image":
-            return "category_images";
-        case "image":
-            return "images";
-        default:
-            throw new Error(`Invalid field name: ${fieldname}`);
-    }
-};
+export const processAndUploadMedia = () => { }
+export const uploadMedia = () => { }
 
-// Multer memory storage (images only)
-const upload = multer({
+// Multer → Memory storage (file is stored in RAM)
+export const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 20 * 1024 * 1024 }, // 20MB max
-    fileFilter: (req, file, cb) => {
-        const isImage = file.mimetype.startsWith("image/");
-        const isOctetStream = file.mimetype === "application/octet-stream";
-        const ext = path.extname(file.originalname).toLowerCase();
-        const isJfif = ext === ".jfif";
-
-        if (["category_image", "image"].includes(file.fieldname)) {
-            return (isImage || isOctetStream || isJfif)
-                ? cb(null, true)
-                : cb(new Error("Invalid image file."));
-        }
-
-        return cb(new Error(`Invalid field name for upload: ${file.fieldname}`));
-    }
+    limits: { fileSize: 20 * 1024 * 1024 } // 20MB
 });
 
-// Convert JFIF → JPEG + upload to S3
-const processAndUploadMedia = async (req, res, next) => {
-    if (!req.files) return next();
+// Function to upload a single file to S3
+export const uploadFile = async (file) => {
+    if (!file) throw new Error("No file provided");
 
-    try {
-        req.s3Files = {};
+    // Handle JFIF or octet-stream → Convert to JPEG
+    const ext = path.extname(file.originalname).toLowerCase();
+    const shouldConvert = ext === ".jfif" || file.mimetype === "application/octet-stream";
 
-        for (const fieldname of Object.keys(req.files)) {
-            const file = req.files[fieldname][0];
-            const ext = path.extname(file.originalname).toLowerCase();
-            const shouldConvert = ext === ".jfif" || file.mimetype === "application/octet-stream";
+    const buffer = shouldConvert
+        ? await sharp(file.buffer).jpeg().toBuffer()
+        : file.buffer;
 
-            const buffer = shouldConvert
-                ? await sharp(file.buffer).jpeg().toBuffer()
-                : file.buffer;
+    // File key (folder + timestamp)
+    const fileName = `${Date.now()}.jpeg`;
+    const key = `uploads/${fileName}`;
 
-            const folder = getS3Folder(fieldname);
-            const fileName = `${Date.now()}.jpeg`;
-            const key = `${folder}/${fileName}`;
+    // Upload to S3
+    await s3.send(new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET_NAME,
+        Key: key,
+        Body: buffer,
+        ContentType: "image/jpeg",
+    }));
 
-            await s3.send(new PutObjectCommand({
-                Bucket: process.env.S3_BUCKET_NAME,
-                Key: key,
-                Body: buffer,
-                ContentType: "image/jpeg",
-            }));
-
-            req.s3Files[fieldname] = {
-                url: `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.S3_REGION}.amazonaws.com/${key}`,
-                key
-            };
-        }
-
-        next();
-    } catch (err) {
-        console.error("S3 Upload Error:", err);
-        return res.status(500).json({
-            success: false,
-            message: "Image upload failed",
-            error: err.message
-        });
-    }
+    // Return uploaded file info
+    return {
+        url: `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.S3_REGION}.amazonaws.com/${key}`,
+        key
+    };
 };
-
-// Export upload fields (image only)
-export const uploadMedia = upload.fields([
-    { name: "category_image", maxCount: 1 },
-    { name: "image", maxCount: 1 }
-]);
-
-export { upload, processAndUploadMedia };

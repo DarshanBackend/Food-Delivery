@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import twilio from 'twilio'
 import jwt from 'jsonwebtoken';
 import transporter from '../utils/Email.config.js'
+import axios from 'axios';
 
 //twillio config
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -48,12 +49,29 @@ export class AuthController {
             // Hash password
             const hashedPassword = await bcrypt.hash(password, AuthController.saltRounds);
 
+            //generate random avatar image.
+            function Ravatar(name) {
+                try {
+                    const formattedName = name.trim().replace(/\s+/g, "+");
+
+                    const avatarUrl = `https://ui-avatars.com/api/?name=${formattedName}&background=random`;
+
+                    return avatarUrl;
+
+                } catch (error) {
+                    console.error("Error generating avatar:", error);
+                    return null;
+                }
+            }
+            const profileAvatar = Ravatar(name) || "";
+
             // Create new user
             const newUser = await UserModel.create({
                 name,
                 email,
                 mobileNo,
                 password: hashedPassword,
+                avatar: profileAvatar,
                 role
             });
 
@@ -74,6 +92,7 @@ export class AuthController {
                         name: newUser.name,
                         mobileNo: newUser.mobileNo,
                         email: newUser.email,
+                        avatar: newUser.avatar,
                         role: newUser.role
                     }
                 });

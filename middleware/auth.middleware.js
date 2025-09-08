@@ -21,7 +21,7 @@ export const UserAuth = async (req, res, next) => {
             const decodedObj = jwt.verify(token, process.env.JWT_SECRET);
             const { _id } = decodedObj;
 
-            const user = await registerModel.findById(_id || userId);
+            const user = await registerModel.findById({ _id: _id });
             if (!user) {
                 return sendNotFoundResponse(res, "User not found");
             }
