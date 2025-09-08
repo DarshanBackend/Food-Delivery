@@ -23,7 +23,13 @@ const sellerSchema = new mongoose.Schema({
         { city: { type: String, default: null } },
         { state: { type: String, default: null } }
     ],
-    isSellerAgreementAccept: { type: Boolean, default: false }
+    isSellerAgreementAccept: { type: Boolean, default: false },
+    total_product: {
+        type: Number
+    },
+    products: [
+        { type: mongoose.Schema.Types.ObjectId }
+    ]
 });
 
 const sellerModel = mongoose.model("seller", sellerSchema);

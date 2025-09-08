@@ -9,11 +9,13 @@ import {
 import { ThrowError } from "../utils/Error.utils.js";
 import ProductModel from "../model/product.model.js";
 import CategoryModel from "../model/category.model.js";
+import SellerModel from "../model/seller.model.js";
 
 // Create a new product
 export const createProduct = async (req, res) => {
     try {
         const { categoryId, product_name } = req.body;
+        const { id } = req.user;
 
         if (!categoryId || !product_name) {
             return sendBadRequestResponse(res, "categoryId & product_name are required!!!");
@@ -23,20 +25,32 @@ export const createProduct = async (req, res) => {
             return sendBadRequestResponse(res, "Invalid categoryId");
         }
 
-        const checkCategoryId = await CategoryModel.findById(categoryId);
-        if (!checkCategoryId) {
+        const checkCategory = await CategoryModel.findById(categoryId);
+        if (!checkCategory) {
             return sendNotFoundResponse(res, "Category not found!!!");
         }
 
-        const checkProductexist = await ProductModel.findOne({ product_name });
-        if (checkProductexist) {
+        // Check if product already exists for this seller
+        const existingProduct = await ProductModel.findOne({
+            product_name,
+            sellerId: id
+        });
+        if (existingProduct) {
             return sendBadRequestResponse(res, "Product already exists!!!");
         }
 
+        // Create product
         const newProduct = await ProductModel.create({
             categoryId,
             product_name,
+            sellerId: id
         });
+
+        // Link product to seller
+        await SellerModel.findByIdAndUpdate(
+            id,
+            { $push: { products: newProduct._id } }
+        );
 
         return sendCreatedResponse(res, "Product added successfully", newProduct);
 
@@ -136,6 +150,12 @@ export const deleteProduct = async (req, res) => {
         }
 
         await ProductModel.findByIdAndDelete(id);
+
+        await SellerModel.findByIdAndUpdate(
+            product.sellerId,
+            { $pull: { products: product._id } }
+        );
+
         return sendSuccessResponse(res, "Product deleted successfully", null);
 
     } catch (error) {

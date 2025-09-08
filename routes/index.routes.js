@@ -39,11 +39,11 @@ indexRouter.put("/updateCategory/:id", UserAuth, isAdmin, uploadMedia, processAn
 indexRouter.delete("/deleteCategory/:id", UserAuth, isAdmin, CategoryController.deleteCategory)
 
 // Product
-indexRouter.post("/createProduct", UserAuth, sellerAuth, createProduct)
-indexRouter.get("/getAllProduct", UserAuth, getAllProduct)
-indexRouter.get("/getProductById/:id", UserAuth, getProductById)
-indexRouter.put("/updateProduct/:id", UserAuth, sellerAuth, updateProduct)
-indexRouter.delete("/deleteProduct/:id", UserAuth, sellerAuth, deleteProduct)
+indexRouter.post("/createProduct", sellerAuth, createProduct)
+indexRouter.get("/getAllProduct", getAllProduct)
+indexRouter.get("/getProductById/:id", getProductById)
+indexRouter.put("/updateProduct/:id", sellerAuth, updateProduct)
+indexRouter.delete("/deleteProduct/:id", sellerAuth, deleteProduct)
 
 
 //seller.kyc.router.js
