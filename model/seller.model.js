@@ -4,6 +4,7 @@ const sellerSchema = new mongoose.Schema({
     mobileNo: { type: String, required: [true, "mobileNo iS Required to insert"], default: null },
     email: { type: String, required: [true, "email iS Required to insert"], default: null },
     password: { type: String, required: [true, "password iS Required to insert"], default: null },
+    avatar: { type: String, default: null },
     otp: { type: String, default: null },
     GSTIN: { type: String, default: null },
     verified: { type: Boolean, default: false }, //GSTIN & mobile OTP both verfi after this TRUE

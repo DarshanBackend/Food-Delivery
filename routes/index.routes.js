@@ -5,6 +5,7 @@ import { CategoryController } from '../controller/category.controller.js';
 import { isAdmin, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { processAndUploadMedia, upload, uploadMedia } from '../middleware/imageUpload.js';
 import { createProduct, deleteProduct, getAllProduct, getProductById, updateProduct } from '../controller/product.controller.js';
+import { getProfileController, userAddressAddController, userAddressUpdatecontroller, userProfileUpdateController } from '../controller/profile.controller.js';
 
 const indexRouter = express.Router();
 
@@ -32,11 +33,11 @@ indexRouter.post("/seller/verify/forget/password", sellerVerifyForgetOtpControll
 indexRouter.post("/seller/reset/password", sellerPasswordResetController);
 
 // Category 
-indexRouter.post("/createCategory", UserAuth, isAdmin, uploadMedia, processAndUploadMedia, CategoryController.createCategory)
-indexRouter.get("/getAllCategory", UserAuth, CategoryController.getAllCategory)
-indexRouter.get("/getCategoryById/:id", UserAuth, CategoryController.getCategoryById)
-indexRouter.put("/updateCategory/:id", UserAuth, isAdmin, uploadMedia, processAndUploadMedia, CategoryController.updateCategory)
-indexRouter.delete("/deleteCategory/:id", UserAuth, isAdmin, CategoryController.deleteCategory)
+// indexRouter.post("/createCategory", UserAuth, isAdmin, uploadMedia, processAndUploadMedia, CategoryController.createCategory)
+// indexRouter.get("/getAllCategory", UserAuth, CategoryController.getAllCategory)
+// indexRouter.get("/getCategoryById/:id", UserAuth, CategoryController.getCategoryById)
+// indexRouter.put("/updateCategory/:id", UserAuth, isAdmin, uploadMedia, processAndUploadMedia, CategoryController.updateCategory)
+// indexRouter.delete("/deleteCategory/:id", UserAuth, isAdmin, CategoryController.deleteCategory)
 
 // Product
 indexRouter.post("/createProduct", UserAuth, sellerAuth, createProduct)
@@ -60,4 +61,13 @@ indexRouter.post("/seller/pickup/address", sellerAuth, sellerPickUpAddressSetCon
 //seller agreement accept or not
 indexRouter.post('/seller/agreement', sellerAuth, trueSellerAgreementController);
 
+
+//profile.route.js
+indexRouter.get("/user/profile", UserAuth, getProfileController);
+//update email,name,mobile No,avatar;
+indexRouter.patch("/user/profile/update", UserAuth, upload.single("avatar"), userProfileUpdateController);
+//add address
+indexRouter.post("/user/address", UserAuth, userAddressAddController);
+//update Addree
+indexRouter.patch("/user/address/update/:addressId", UserAuth, userAddressUpdatecontroller);
 export default indexRouter;

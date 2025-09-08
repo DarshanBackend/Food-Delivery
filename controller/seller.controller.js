@@ -30,7 +30,7 @@ export const newSellerController = async (req, res) => {
         }
 
         // Check if already registered
-        const existingSeller = await sellerModel.findOne({ email: email });
+        const existingSeller = await sellerModel.findOne({ mobileNo: mobileNo });
         if (existingSeller) {
             return res.status(409).json({
                 success: false,
@@ -41,10 +41,28 @@ export const newSellerController = async (req, res) => {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+
+        //generate random avatar image.
+        function Ravatar(email) {
+            try {
+                const formattedName = email.trim().replace(/\s+/g, "+");
+
+                const avatarUrl = `https://ui-avatars.com/api/?name=${formattedName}&background=random`;
+
+                return avatarUrl;
+
+            } catch (error) {
+                console.error("Error generating avatar:", error);
+                return null;
+            }
+        }
+        const profileAvatar = Ravatar(email) || "";
+
         // Create new seller
         const newSeller = await sellerModel.create({
             email,
             mobileNo,
+            avatar: profileAvatar,
             password: hashedPassword,
         });
 
@@ -65,6 +83,7 @@ export const newSellerController = async (req, res) => {
                     id: newSeller._id,
                     mobileNo: newSeller.mobileNo,
                     email: newSeller.email,
+                    avatar: newSeller.avatar
                 },
             });
         } catch (twilioError) {
@@ -790,7 +809,7 @@ export const sellerBankInfoSetController = async (req, res) => {
         // ✅ Update Seller Bank Info
         const sellerBank = await sellerModel.findByIdAndUpdate(
             { _id: id },
-            { BankAcNumber, ifsc: String(ifsc).toUpperCase()},
+            { BankAcNumber, ifsc: String(ifsc).toUpperCase() },
             { new: true }
         );
 
@@ -809,7 +828,7 @@ export const sellerBankInfoSetController = async (req, res) => {
 export const sellerPickUpAddressSetController = async (req, res) => {
     try {
         const { houseNo, street, landmark, pincode, city, state } = req.body;
-        const { id } = req.user || {};
+        const { id } = req?.user || {};
 
         // Validate user
         if (!id) {
