@@ -4,6 +4,7 @@ import { newSellerController, verifySellerMobileOtpController, sellerLoginContro
 import { CategoryController } from '../controller/category.controller.js';
 import { isAdmin, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { processAndUploadMedia, upload, uploadMedia } from '../middleware/imageUpload.js';
+import { createProduct, deleteProduct, getAllProduct, getProductById, updateProduct } from '../controller/product.controller.js';
 
 const indexRouter = express.Router();
 
@@ -37,6 +38,12 @@ indexRouter.get("/getCategoryById/:id", UserAuth, CategoryController.getCategory
 indexRouter.put("/updateCategory/:id", UserAuth, isAdmin, uploadMedia, processAndUploadMedia, CategoryController.updateCategory)
 indexRouter.delete("/deleteCategory/:id", UserAuth, isAdmin, CategoryController.deleteCategory)
 
+// Product
+indexRouter.post("/createProduct", UserAuth, sellerAuth, createProduct)
+indexRouter.get("/getAllProduct", UserAuth, getAllProduct)
+indexRouter.get("/getProductById/:id", UserAuth, getProductById)
+indexRouter.put("/updateProduct/:id", UserAuth, sellerAuth, updateProduct)
+indexRouter.delete("/deleteProduct/:id", UserAuth, sellerAuth, deleteProduct)
 
 
 //seller.kyc.router.js
