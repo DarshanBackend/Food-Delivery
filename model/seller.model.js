@@ -16,12 +16,14 @@ const sellerSchema = new mongoose.Schema({
     BankAcNumber: { type: String, default: null },
     ifsc: { type: String, default: null },
     pickUpAddr: [
-        { houseNo: { type: String, default: null } },
-        { street: { type: String, default: null } },
-        { landmark: { type: String, default: null } },
-        { pincode: { type: String, default: null } },
-        { city: { type: String, default: null } },
-        { state: { type: String, default: null } }
+        {
+            houseNo: { type: String, default: null },
+            street: { type: String, default: null },
+            landmark: { type: String, default: null },
+            pincode: { type: String, default: null },
+            city: { type: String, default: null },
+            state: { type: String, default: null }
+        }
     ],
     isSellerAgreementAccept: { type: Boolean, default: false }
 });

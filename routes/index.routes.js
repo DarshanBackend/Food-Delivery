@@ -1,6 +1,6 @@
 import express from 'express';
 import { AuthController } from '../controller/auth.controller.js';
-import { newSellerController, verifySellerMobileOtpController, sellerLoginController, sellerForgetPasswordController, sellerVerifyForgetOtpController, sellerPasswordResetController, sellerGstVerifyAndInsertController, setSellerBusinessAddressController, sellerGstResetOtpController, sellerBrandInfoAddController, sellerBankInfoSetController } from '../controller/seller.controller.js';
+import { newSellerController, verifySellerMobileOtpController, sellerLoginController, sellerForgetPasswordController, sellerVerifyForgetOtpController, sellerPasswordResetController, sellerGstVerifyAndInsertController, setSellerBusinessAddressController, sellerGstResetOtpController, sellerBrandInfoAddController, sellerBankInfoSetController, sellerPickUpAddressSetController, trueSellerAgreementController } from '../controller/seller.controller.js';
 import { CategoryController } from '../controller/category.controller.js';
 import { isAdmin, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { processAndUploadMedia, upload, uploadMedia } from '../middleware/imageUpload.js';
@@ -47,6 +47,10 @@ indexRouter.post("/seller/gst/reset/otp", sellerAuth, sellerGstResetOtpControlle
 //seller.brand.info.router.js
 indexRouter.post("/seller/brand/info", sellerAuth, sellerBrandInfoAddController);
 //seller bank detail verify & insert record
-indexRouter.post("/seller/bank/insert",sellerAuth,sellerBankInfoSetController);
+indexRouter.post("/seller/bank/insert", sellerAuth, sellerBankInfoSetController);
+//seller.pickup.address.js
+indexRouter.post("/seller/pickup/address", sellerAuth, sellerPickUpAddressSetController)
+//seller agreement accept or not
+indexRouter.post('/seller/agreement', sellerAuth, trueSellerAgreementController);
 
 export default indexRouter;

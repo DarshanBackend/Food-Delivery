@@ -7,6 +7,8 @@ import twilio from "twilio";
 import jwt from 'jsonwebtoken';
 import transporter from '../utils/Email.config.js'
 import validateGSTIN from '../utils/gst.verify.config.js'
+import axios from 'axios';
+import { stat } from 'fs';
 
 //global config
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -745,24 +747,138 @@ export const sellerBrandInfoAddController = async (req, res) => {
     }
 }
 
-export const sellerBankInfoSetController = () => {
+export const sellerBankInfoSetController = async (req, res) => {
     try {
-        const { id } = req?.user;
+        const { id } = req?.user || {};
 
-        if (!id && req?.user) {
-            return sendNotFoundResponse(res, "req.user & user id no Found!!");
+        if (!id) {
+            return sendNotFoundResponse(res, "User ID not found in request!");
         }
 
-        const { BankAcNumber, ifsc } = req?.body;
+        const { BankAcNumber, ifsc } = req?.body || {};
 
-        if (!BankAcNumber && !ifsc) {
-            return sendNotFoundResponse(res, "BankAcNumber & ifsc Are require to Request!");
+        if (!BankAcNumber || !ifsc) {
+            return sendNotFoundResponse(res, "BankAcNumber & ifsc are required!");
         }
 
-        
+        // ✅ Verify IFSC Code
+        try {
+            const ifsc_verify_base_url = "https://ifsc.razorpay.com";
+            const { data: ifscData } = await axios.get(
+                `${ifsc_verify_base_url}/${String(ifsc).toUpperCase()}`
+            );
+
+            if (!ifscData) {
+                return sendErrorResponse(res, 404, `${ifsc} is not a valid IFSC code!`);
+            }
+        } catch (err) {
+            return sendErrorResponse(res, 400, `Invalid IFSC code: ${ifsc}`);
+        }
+
+        // ✅ Verify Bank Account Number
+        const verifyAccountNumber = (accNo) => /^\d{9,18}$/.test(String(accNo).trim());
+        const isValidBankNumber = verifyAccountNumber(BankAcNumber);
+
+        if (!isValidBankNumber) {
+            return sendErrorResponse(
+                res,
+                400,
+                "Invalid Bank Account Number! Must be 9–18 digits."
+            );
+        }
+
+        // ✅ Update Seller Bank Info
+        const sellerBank = await sellerModel.findByIdAndUpdate(
+            { _id: id },
+            { BankAcNumber, ifsc: String(ifsc).toUpperCase()},
+            { new: true }
+        );
+
+        if (!sellerBank) {
+            return sendNotFoundResponse(res, "Seller not found!");
+        }
+
+        return sendSuccessResponse(res, "Seller bank info updated successfully!", sellerBank);
+    } catch (error) {
+        console.error("Error in sellerBankInfoSetController:", error.message);
+        return sendErrorResponse(res, 500, "Internal Server Error", error.message);
+    }
+};
+
+
+export const sellerPickUpAddressSetController = async (req, res) => {
+    try {
+        const { houseNo, street, landmark, pincode, city, state } = req.body;
+        const { id } = req.user || {};
+
+        // Validate user
+        if (!id) {
+            return sendBadRequestResponse(res, "User not found in request!");
+        }
+
+        // Validate address fields
+        if (![houseNo, street, landmark, pincode, city, state].every(field => field && field.toString().trim() !== "")) {
+            return sendBadRequestResponse(
+                res,
+                "houseNo, street, landmark, pincode, city & state are required!"
+            );
+        }
+
+        // Save pickup address
+        const SellerPickUpAddr = await sellerModel.findByIdAndUpdate(
+            { _id: id },
+            {
+                $push: {
+                    pickUpAddr: { houseNo, street, landmark, pincode, city, state }
+                }
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!SellerPickUpAddr) {
+            return sendNotFoundResponse(res, "Seller not found!");
+        }
+
+        return sendSuccessResponse(
+            res,
+            "Pick-up address inserted successfully!",
+            { pickUpAddr: SellerPickUpAddr.pickUpAddr }
+        );
 
     } catch (error) {
-        console.log("Error while Add Seller Bank Details" + error.message);
-        return sendErrorResponse("Error while ")
+        console.error("Error while adding PickUp Address:", error);
+        return sendErrorResponse(res, "Error while inserting pick-up address!");
     }
-}
+};
+
+
+export const trueSellerAgreementController = async (req, res) => {
+    try {
+        const { id } = req?.user || {};
+
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return sendBadRequestResponse(res, "Invalid or missing user ID");
+        }
+
+        const accept = await sellerModel.findByIdAndUpdate(
+            { _id: id },
+            { isSellerAgreementAccept: true },
+            { new: true }
+        );
+
+        if (!accept) {
+            return sendNotFoundResponse(res, "Seller not found");
+        }
+
+        return sendSuccessResponse(
+            res,
+            200,
+            `Congratulations, welcome ${accept.email}. Now you are a seller of FastCart.`,
+            accept
+        );
+
+    } catch (error) {
+        console.error("Error while setting Seller Agreement:", error.message);
+        return sendErrorResponse(res, 500, "Something went wrong while accepting agreement");
+    }
+};
