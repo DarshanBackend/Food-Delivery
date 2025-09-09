@@ -215,7 +215,7 @@ export class AuthController {
                 });
             }
 
-            const existingUser = await UserModel.findOne({ email });
+            const existingUser = await UserModel.findOne({ email: email });
             if (existingUser) {
                 const payload = {
                     id: existingUser._id,
@@ -271,7 +271,8 @@ export class AuthController {
                 });
             }
 
-            const user = await UserModel.findOne({ email });
+            // Fetch user with password
+            const user = await UserModel.findOne({ email }).select("+password");
             if (!user) {
                 return res.status(404).json({
                     success: false,
@@ -279,6 +280,7 @@ export class AuthController {
                 });
             }
 
+            // Correct bcrypt usage
             const isPasswordValid = await bcrypt.compare(password, user.password);
             if (!isPasswordValid) {
                 return res.status(401).json({
@@ -294,14 +296,11 @@ export class AuthController {
                 role: user.role || "user"
             };
 
-            const token = jwt.sign(
-                { _id: user._id, email: user.email, role: user.role },
-                process.env.JWT_SECRET
-            );
+            const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "7d" });
 
             return res.status(200).json({
                 success: true,
-                message: "Login successfull",
+                message: "Login successful",
                 user: {
                     id: user._id,
                     name: user.name,
