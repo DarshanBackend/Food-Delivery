@@ -10,6 +10,11 @@ const productSchema = mongoose.Schema({
         type: String,
         required: true
     },
+    sellerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "seller",
+        required: [true, "sellerId is reqquired"]
+    }
 }, { timestamps: true })
 
 export default mongoose.model("product", productSchema);

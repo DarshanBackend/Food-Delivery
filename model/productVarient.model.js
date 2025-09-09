@@ -1,16 +1,16 @@
 import mongoose from "mongoose"
 
 const productVarientSchema = mongoose.Schema({
-    product_name: {
-        type: String,
-        default: null
+    productId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "product"
     },
     product_image: {
         type: String,
         default: null
     },
     product_gallery_image: [
-        { type: String }
+        { type: String, default: null }
     ],
     unit: {
         type: String,
@@ -23,11 +23,7 @@ const productVarientSchema = mongoose.Schema({
     price: {
         type: Number
     },
-    discount: {
-        "250g": "15%",
-        "350g": "20%",
-        "500g": "30%"
-    },
+    discount: [],
     productDesc: {
         type: String
     },
@@ -41,5 +37,9 @@ const productVarientSchema = mongoose.Schema({
         type: Boolen
     }
 }, { timestamps: true })
+
+const DiscountSchem = new mongoose.Schema({
+    
+})
 
 export default mongoose.model("productVarient", productVarientSchema);
