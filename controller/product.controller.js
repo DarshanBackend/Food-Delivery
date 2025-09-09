@@ -3,6 +3,7 @@ import { sendBadRequestResponse, sendErrorResponse, sendNotFoundResponse, sendSu
 import CategoryModel from "../model/category.model.js";
 import productModel from "../model/product.model.js";
 import { uploadFile } from "../middleware/imageUpload.js";
+import sellerModel from "../model/seller.model.js";
 
 
 //new product Insert
@@ -127,6 +128,15 @@ export const newProductController = async (req, res) => {
             productStorage: productStorage || ""
         });
 
+
+        // save all product id in seller collection
+        const sellerProduct = await sellerModel.findByIdAndUpdate(
+            { _id: id },
+            { $push: { products: newProduct._id } },
+            { new: true }
+        );
+
+
         return res.status(201).json({
             success: true,
             message: "Product created successfully",
@@ -165,9 +175,16 @@ export const getAllProductsController = async (req, res) => {
 //get product by catgory id & short product info
 export const getProductByCategoryController = async (req, res) => {
     try {
+        const { categoryId } = req?.params;
 
+        if (!categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
+            return sendBadRequestResponse(res, "catgoey iD is Required!");
+        }
+
+        const product = await productModel.find({ category: categoryId }).select("productImage productName price originalPrice discount packSizes[0]")
+        return res.json(product)
     } catch (error) {
         console.log("error during Fetch Product By catgory (short)");
-        return sendErrorResponse(res, 500, "Error During Fetch Product By category")
+        return sendErrorResponse(res, 500, "Error During Fetch Product By category", error)
     }
 }
