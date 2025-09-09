@@ -1,6 +1,6 @@
 import express from 'express';
 import { AuthController } from '../controller/auth.controller.js';
-import { newSellerController, verifySellerMobileOtpController, sellerLoginController, sellerForgetPasswordController, sellerVerifyForgetOtpController, sellerPasswordResetController, sellerGstVerifyAndInsertController, setSellerBusinessAddressController, sellerGstResetOtpController, sellerBrandInfoAddController, sellerBankInfoSetController, sellerPickUpAddressSetController, trueSellerAgreementController } from '../controller/seller.controller.js';
+import { newSellerController, verifySellerMobileOtpController, sellerLoginController, sellerForgetPasswordController, sellerVerifyForgetOtpController, sellerPasswordResetController, sellerGstVerifyAndInsertController, setSellerBusinessAddressController, sellerGstResetOtpController, sellerBrandInfoAddController, sellerBankInfoSetController, sellerPickUpAddressSetController, trueSellerAgreementController, getAllSeller, getSeller } from '../controller/seller.controller.js';
 import { CategoryController } from '../controller/category.controller.js';
 import { isAdmin, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/imageUpload.js';
@@ -78,5 +78,11 @@ indexRouter.post("/user/change/password", UserAuth, userPasswordChangeController
 
 //delet Account
 indexRouter.delete("/user/remove/account", UserAuth, userRemoveAccountController);
+
+//admin api
+indexRouter.get("/getAllnewUser", AuthController.getAllnewUser)
+indexRouter.get("/getUser", UserAuth, AuthController.getUser)
+indexRouter.get("/getAllSeller", getAllSeller)
+indexRouter.get("/getSeller", sellerAuth, getSeller)
 
 export default indexRouter;

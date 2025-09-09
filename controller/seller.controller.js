@@ -9,6 +9,7 @@ import transporter from '../utils/Email.config.js'
 import validateGSTIN from '../utils/gst.verify.config.js'
 import axios from 'axios';
 import { stat } from 'fs';
+import { ThrowError } from '../utils/Error.utils.js';
 
 //global config
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -106,6 +107,44 @@ export const newSellerController = async (req, res) => {
             error: error.message,
         });
     }
+};
+
+export const getAllSeller = async (req, res) => {
+    try {
+        const sellerData = await sellerModel.find({})
+
+        if (!sellerData || sellerData.length == 0) {
+            return sendNotFoundResponse(res, "Seller not found!!!")
+        }
+
+        return sendSuccessResponse(res, "Seller fetched Successfully...", sellerData)
+
+    } catch (error) {
+        console.error("Seller fetch Error:", error.message);
+        return res.status(500).json({
+            success: false,
+            message: "Error fetching new seller",
+            error: error.message,
+        });
+    }
+}
+
+export const getSeller = async (req, res) => {
+    try {
+        const { id } = req.user;
+
+        // Exclude sensitive fields
+        const seller = await sellerModel.findById(id).select("-password -tokens");
+        if (!seller) {
+            return sendNotFoundResponse(res, "Seller not found");
+        }
+
+        return sendSuccessResponse(res, "Seller profile fetched successfully", seller);
+
+    } catch (error) {
+        console.error("Seller fetch Error:", error.message);
+        return ThrowError(res, 500, error.message);
+    }   
 };
 
 //verify mobile otp while register
@@ -466,7 +505,6 @@ export const sellerPasswordResetController = async (req, res) => {
         });
     }
 }
-
 
 //seller.kyc.controller
 export const sellerGstVerifyAndInsertController = async (req, res) => {

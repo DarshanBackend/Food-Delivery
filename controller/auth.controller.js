@@ -6,6 +6,7 @@ import twilio from 'twilio'
 import jwt from 'jsonwebtoken';
 import transporter from '../utils/Email.config.js'
 import axios from 'axios';
+import { sendBadRequestResponse, sendNotFoundResponse, sendSuccessResponse } from '../utils/Response.utils.js';
 
 //twillio config
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -110,6 +111,47 @@ export class AuthController {
             return res.status(500).json({
                 success: false,
                 message: "Error registering new user & sending OTP",
+                error: error.message
+            });
+        }
+    }
+
+    static async getAllnewUser(req, res) {
+        try {
+            const userData = await UserModel.find({})
+
+            if (!userData || userData.length == 0) {
+                return sendNotFoundResponse(res, "User not found!!!!")
+            }
+
+            return sendSuccessResponse(res, "User fetched Successfully...", userData)
+
+        } catch (error) {
+            console.error("Data fetch Error:", error.message);
+            return res.status(500).json({
+                success: false,
+                message: "Error Fetching new user Data",
+                error: error.message
+            });
+        }
+    }
+
+    static async getUser(req, res) {
+        try {
+            const { id } = req.user
+
+            const checkUser = await UserModel.findById(id).select("-password -tokens");
+            if (!checkUser) {
+                return sendNotFoundResponse(res, "User not found")
+            }
+
+            return sendSuccessResponse(res, "User fetched successfully...", checkUser)
+
+        } catch (error) {
+            console.error("Data fetch Error:", error.message);
+            return res.status(500).json({
+                success: false,
+                message: "Error Fetching new user Data",
                 error: error.message
             });
         }
