@@ -4,6 +4,7 @@ import UserModel from "../model/user.model.js";
 import { uploadFile } from "../middleware/imageUpload.js";
 import axios from "axios";
 import bcrypt from 'bcryptjs';
+import sellerModel from "../model/seller.model.js";
 
 export const getProfileController = async (req, res) => {
     try {
@@ -318,3 +319,26 @@ export const userRemoveAccountController = async (req, res) => {
         return sendErrorResponse(res, 500, "Error while Delete User Account!", error)
     }
 }
+
+//seller profile
+export const getSellerProfileController = async (req, res) => {
+    try {
+        const { id } = req?.user;
+
+        if (!id) {
+            return sendErrorResponse(res, 400, "Seller ID missing from token");
+        }
+
+        const seller = await sellerModel.findById(id).select("-password"); 
+        // exclude password field for security
+
+        if (!seller) {
+            return sendNotFoundResponse(res, "Seller not found");
+        }
+
+        return sendSuccessResponse(res, "Seller profile fetched successfully", seller);
+    } catch (error) {
+        console.error("Error fetching seller profile:", error);
+        return sendErrorResponse(res, 500, "Error fetching seller profile");
+    }
+};
