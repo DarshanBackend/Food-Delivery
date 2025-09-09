@@ -69,12 +69,14 @@ indexRouter.post("/user/address", UserAuth, userAddressAddController);
 indexRouter.patch("/user/address/update/:addressId", UserAuth, userAddressUpdatecontroller);
 indexRouter.delete("/user/address/delete/:addressId", UserAuth, userAddressDeleteController);
 indexRouter.get("/user/address", UserAuth, getUserAddressController);
+
+
 //change password
 indexRouter.post("/user/change/password", UserAuth, userPasswordChangeController);
 //delete Account
 indexRouter.delete("/user/remove/account", UserAuth, userRemoveAccountController);
 //seller.profile
-indexRouter.get("/seller/profile", sellerAuth, getSellerProfileController)
+indexRouter.get("/seller/profile", sellerAuth, getSellerProfileController);
 
 //admin api
 indexRouter.get("/getAllnewUser", AuthController.getAllnewUser)
