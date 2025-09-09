@@ -9,6 +9,7 @@ import transporter from '../utils/Email.config.js'
 import validateGSTIN from '../utils/gst.verify.config.js'
 import axios from 'axios';
 import { stat } from 'fs';
+import { ThrowError } from '../utils/Error.utils.js';
 
 //global config
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -105,6 +106,44 @@ export const newSellerController = async (req, res) => {
             message: "Error registering new seller",
             error: error.message,
         });
+    }
+};
+
+export const getAllSeller = async (req, res) => {
+    try {
+        const sellerData = await sellerModel.find({})
+
+        if (!sellerData || sellerData.length == 0) {
+            return sendNotFoundResponse(res, "Seller not found!!!")
+        }
+
+        return sendSuccessResponse(res, "Seller fetched Successfully...", sellerData)
+
+    } catch (error) {
+        console.error("Seller fetch Error:", error.message);
+        return res.status(500).json({
+            success: false,
+            message: "Error fetching new seller",
+            error: error.message,
+        });
+    }
+}
+
+export const getSeller = async (req, res) => {
+    try {
+        const { id } = req.user;
+
+        // Exclude sensitive fields
+        const seller = await sellerModel.findById(id).select("-password -tokens");
+        if (!seller) {
+            return sendNotFoundResponse(res, "Seller not found");
+        }
+
+        return sendSuccessResponse(res, "Seller profile fetched successfully", seller);
+
+    } catch (error) {
+        console.error("Seller fetch Error:", error.message);
+        return ThrowError(res, 500, error.message);
     }
 };
 
@@ -467,7 +506,6 @@ export const sellerPasswordResetController = async (req, res) => {
     }
 }
 
-
 //seller.kyc.controller
 export const sellerGstVerifyAndInsertController = async (req, res) => {
     try {
@@ -643,6 +681,48 @@ export const setSellerBusinessAddressController = async (req, res) => {
         return sendErrorResponse(res, 500, "Something Went Wrong Durning Busineness Address add!", error);
     }
 }
+
+export const verifySellerOtpController = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        if (!email || !otp) {
+            return sendBadRequestResponse(res, "Email and OTP are required!");
+        }
+
+        // 🔎 Find seller
+        const seller = await sellerModel.findOne({ email });
+        if (!seller) {
+            return sendNotFoundResponse(res, "Seller not found!");
+        }
+
+        // 🔐 Check OTP exist
+        if (!seller.otp) {
+            return sendBadRequestResponse(res, "No OTP found for this seller. Please request again!");
+        }
+
+        // Match check
+        if (otp !== seller.otp) {
+            return sendBadRequestResponse(res, "Invalid OTP. Please try again!");
+        }
+
+        // ✅ OTP Verified → clear field
+        seller.otp = null;
+        seller.isVerified = true; // optional flag
+        await seller.save();
+
+        return sendSuccessResponse(res, "✅ OTP Verified Successfully!", {
+            email: seller.email,
+            businessName: seller.businessName,
+            panNumber: seller.panNumber,
+            verified: true
+        });
+
+    } catch (error) {
+        console.error("Error verifying seller OTP:", error.message);
+        return sendErrorResponse(res, 500, "Something went wrong while verifying OTP!", error.message);
+    }
+};
 
 export const sellerGstResetOtpController = async (req, res) => {
     try {
@@ -824,7 +904,6 @@ export const sellerBankInfoSetController = async (req, res) => {
     }
 };
 
-
 export const sellerPickUpAddressSetController = async (req, res) => {
     try {
         const { houseNo, street, landmark, pincode, city, state } = req.body;
@@ -869,7 +948,6 @@ export const sellerPickUpAddressSetController = async (req, res) => {
         return sendErrorResponse(res, "Error while inserting pick-up address!");
     }
 };
-
 
 export const trueSellerAgreementController = async (req, res) => {
     try {

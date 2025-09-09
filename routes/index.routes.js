@@ -1,6 +1,6 @@
 import express from 'express';
 import { AuthController } from '../controller/auth.controller.js';
-import { newSellerController, verifySellerMobileOtpController, sellerLoginController, sellerForgetPasswordController, sellerVerifyForgetOtpController, sellerPasswordResetController, sellerGstVerifyAndInsertController, setSellerBusinessAddressController, sellerGstResetOtpController, sellerBrandInfoAddController, sellerBankInfoSetController, sellerPickUpAddressSetController, trueSellerAgreementController } from '../controller/seller.controller.js';
+import { newSellerController, verifySellerMobileOtpController, sellerLoginController, sellerForgetPasswordController, sellerVerifyForgetOtpController, sellerPasswordResetController, sellerGstVerifyAndInsertController, setSellerBusinessAddressController, sellerGstResetOtpController, sellerBrandInfoAddController, sellerBankInfoSetController, sellerPickUpAddressSetController, trueSellerAgreementController, getAllSeller, getSeller, verifySellerOtpController } from '../controller/seller.controller.js';
 import { CategoryController } from '../controller/category.controller.js';
 import { sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/imageUpload.js';
@@ -51,6 +51,7 @@ indexRouter.get("/filter",filterProductController)
 //seller.kyc.router.js
 indexRouter.post("/seller/gst/verify", sellerAuth, sellerGstVerifyAndInsertController);
 indexRouter.post("/seller/business/address", sellerAuth, setSellerBusinessAddressController); //business info save + otp send for GST verify
+indexRouter.post("/seller/verify/otp", sellerAuth, verifySellerOtpController)
 indexRouter.post("/seller/gst/reset/otp", sellerAuth, sellerGstResetOtpController); //resend gst verif y OTP
 
 //seller.brand.info.router.js
@@ -81,5 +82,11 @@ indexRouter.post("/user/change/password", UserAuth, userPasswordChangeController
 indexRouter.delete("/user/remove/account", UserAuth, userRemoveAccountController);
 //seller.profile
 indexRouter.get("/seller/profile", sellerAuth, getSellerProfileController);
+
+//admin api
+indexRouter.get("/getAllnewUser", AuthController.getAllnewUser)
+indexRouter.get("/getUser", UserAuth, AuthController.getUser)
+indexRouter.get("/getAllSeller", getAllSeller)
+indexRouter.get("/getSeller", sellerAuth, getSeller)
 
 export default indexRouter;
