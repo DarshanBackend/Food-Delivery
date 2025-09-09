@@ -15,9 +15,6 @@ const s3 = new S3Client({
     }
 });
 
-export const processAndUploadMedia = () => { }
-export const uploadMedia = () => { }
-
 // Multer → Memory storage (file is stored in RAM)
 export const upload = multer({
     storage: multer.memoryStorage(),

@@ -4,6 +4,7 @@ import CategoryModel from "../model/category.model.js";
 import { sendBadRequestResponse, sendCreatedResponse, sendErrorResponse, sendSuccessResponse } from "../utils/Response.utils.js";
 import { s3, publicUrlForKey, cleanupUploadedIfAny } from "../utils/aws.config.js";
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { uploadFile } from "../middleware/imageUpload.js";
 
 export class CategoryController {
 
@@ -21,29 +22,22 @@ export class CategoryController {
                 return sendBadRequestResponse(res, "This Category already exists");
             }
 
-            let category_image = null;
-            let category_image_key = null;
-
-            // Prefer S3 files
-            if (req.s3Files?.category_image) {
-                category_image = req.s3Files.category_image.url;
-                category_image_key = req.s3Files.category_image.key;
-            }
-            // fallback (local storage)
-            else if (req.files?.category_image?.[0]) {
-                const file = req.files.category_image[0];
-                category_image = `/uploads/${file.filename}`;
-                category_image_key = file.filename;
+            let avatarUrl;
+            if (req.file) {
+                const result = await uploadFile(req.file);
+                avatarUrl = result.url;
             }
 
             const newCategory = await CategoryModel.create({
                 category_name,
-                category_image,
-                category_image_key,
+                category_image: avatarUrl,
+                category_image_key: null,
             });
 
             return sendCreatedResponse(res, "Category added successfully", newCategory);
+
         } catch (error) {
+            console.error("Create Category Error:", error.message);
             return ThrowError(res, 500, error.message);
         }
     }
@@ -87,47 +81,50 @@ export class CategoryController {
             const { id } = req.params;
             const { category_name } = req.body;
 
-            const pickUploaded = () => {
-                if (req.file) return req.file;
-                if (req.files?.category_image?.[0]) return req.files.category_image[0];
-                return null;
-            };
-            const uploaded = pickUploaded();
-
             if (!mongoose.Types.ObjectId.isValid(id)) {
-                await cleanupUploadedIfAny(uploaded);
                 return sendBadRequestResponse(res, "Invalid Category ID");
             }
 
             const existingCategory = await CategoryModel.findById(id);
             if (!existingCategory) {
-                await cleanupUploadedIfAny(uploaded);
                 return sendErrorResponse(res, 404, "Category not found");
             }
 
-            if (uploaded?.key) {
-                const oldKey = existingCategory.category_image_key;
-                if (oldKey) {
-                    try {
-                        await s3.send(new DeleteObjectCommand({
-                            Bucket: process.env.S3_BUCKET_NAME,
-                            Key: oldKey,
-                        }));
-                    } catch (e) {
-                        console.error('Failed to delete old S3 object:', e.message);
+            // Handle Image Upload
+            if (req.file) {
+                try {
+                    // Delete old image from S3 if exists
+                    if (existingCategory.category_image_key) {
+                        try {
+                            await s3.send(new DeleteObjectCommand({
+                                Bucket: process.env.S3_BUCKET_NAME,
+                                Key: existingCategory.category_image_key,
+                            }));
+                        } catch (delErr) {
+                            console.error("Failed to delete old S3 object:", delErr.message);
+                        }
                     }
+
+                    // Upload new file
+                    const result = await uploadFile(req.file);
+                    existingCategory.category_image = result.url;
+                    existingCategory.category_image_key = result.key;
+                } catch (uploadErr) {
+                    console.error("S3 Upload Error:", uploadErr.message);
+                    return sendErrorResponse(res, 500, "Error while uploading category image");
                 }
-                existingCategory.category_image = publicUrlForKey(uploaded.key);
-                existingCategory.category_image_key = uploaded.key;
             }
 
+            // Update category_name if provided
             if (category_name) {
                 existingCategory.category_name = category_name;
             }
 
             await existingCategory.save();
             return sendSuccessResponse(res, "Category updated successfully", existingCategory);
+
         } catch (error) {
+            console.error("Update Category Error:", error.message);
             return ThrowError(res, 500, error.message);
         }
     }
@@ -141,32 +138,29 @@ export class CategoryController {
                 return sendBadRequestResponse(res, "Invalid Category ID");
             }
 
-            const category = await CategoryModel.findByIdAndDelete(id);
+            const category = await CategoryModel.findById(id);
             if (!category) {
                 return sendErrorResponse(res, 404, "Category not found");
             }
 
-            let keyToDelete = category.category_image_key;
-            if (!keyToDelete && category.category_image) {
-                try {
-                    const url = new URL(category.category_image);
-                    keyToDelete = url.pathname.replace(/^\//, '');
-                } catch { }
-            }
-
-            if (keyToDelete) {
+            // 🗑️ Delete image from S3 if exists
+            if (category.category_image_key) {
                 try {
                     await s3.send(new DeleteObjectCommand({
                         Bucket: process.env.S3_BUCKET_NAME,
-                        Key: keyToDelete,
+                        Key: category.category_image_key,
                     }));
-                } catch (e) {
-                    console.error('Failed to delete S3 object:', e.message);
+                } catch (err) {
+                    console.error("Failed to delete S3 object:", err.message);
                 }
             }
 
+            // ❌ Delete category from DB
+            await category.deleteOne();
+
             return sendSuccessResponse(res, "Category deleted successfully");
         } catch (error) {
+            console.error("Delete Category Error:", error.message);
             return ThrowError(res, 500, error.message);
         }
     }

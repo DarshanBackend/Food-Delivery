@@ -10,6 +10,7 @@ import { ThrowError } from "../utils/Error.utils.js";
 import ProductModel from "../model/product.model.js";
 import CategoryModel from "../model/category.model.js";
 import SellerModel from "../model/seller.model.js";
+import { uploadFile } from "../middleware/imageUpload.js";
 
 // Create a new product
 export const createProduct = async (req, res) => {
@@ -39,14 +40,33 @@ export const createProduct = async (req, res) => {
             return sendBadRequestResponse(res, "Product already exists!!!");
         }
 
-        // Create product
+
+        let product_image = { url: null, key: null };
+        let product_gallery_image = [];
+
+        // Single main product image
+        if (req.files?.product_image?.[0]) {
+            const result = await uploadFile(req.files.product_image[0]);
+            product_image = { url: result.url, key: result.key };
+        }
+
+        // Multiple gallery images
+        if (req.files?.product_gallery_image) {
+            for (const file of req.files.product_gallery_image) {
+                const result = await uploadFile(file);
+                product_gallery_image.push({ url: result.url, key: result.key });
+            }
+        }
+
         const newProduct = await ProductModel.create({
             categoryId,
             product_name,
-            sellerId: id
+            sellerId: id,
+            product_image,
+            product_gallery_image
         });
 
-        // Link product to seller
+
         await SellerModel.findByIdAndUpdate(
             id,
             { $push: { products: newProduct._id } }
@@ -55,6 +75,7 @@ export const createProduct = async (req, res) => {
         return sendCreatedResponse(res, "Product added successfully", newProduct);
 
     } catch (error) {
+        console.error("Create Product Error:", error.message);
         return ThrowError(res, 500, error.message);
     }
 };
@@ -107,11 +128,10 @@ export const updateProduct = async (req, res) => {
             return sendNotFoundResponse(res, "Product not found!!!");
         }
 
-        if (categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
-            return sendBadRequestResponse(res, "Invalid categoryId");
-        }
-
         if (categoryId) {
+            if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+                return sendBadRequestResponse(res, "Invalid categoryId");
+            }
             const categoryExists = await CategoryModel.findById(categoryId);
             if (!categoryExists) {
                 return sendNotFoundResponse(res, "Category not found!!!");
@@ -125,6 +145,49 @@ export const updateProduct = async (req, res) => {
                 return sendBadRequestResponse(res, "Product name already exists!!!");
             }
             product.product_name = product_name;
+        }
+
+        if (req.files?.product_image?.[0]) {
+            const file = req.files.product_image[0];
+            const result = await uploadFile(file);
+
+            // Delete old image from S3
+            if (product.product_image?.key) {
+                try {
+                    await s3.send(new DeleteObjectCommand({
+                        Bucket: process.env.S3_BUCKET_NAME,
+                        Key: product.product_image.key
+                    }));
+                } catch (err) {
+                    console.error("Failed to delete old product image:", err.message);
+                }
+            }
+
+            product.product_image = { url: result.url, key: result.key };
+        }
+
+        if (req.files?.product_gallery_image) {
+            // Delete old gallery images
+            for (const img of product.product_gallery_image) {
+                if (img?.key) {
+                    try {
+                        await s3.send(new DeleteObjectCommand({
+                            Bucket: process.env.S3_BUCKET_NAME,
+                            Key: img.key
+                        }));
+                    } catch (err) {
+                        console.error("Failed to delete old gallery image:", err.message);
+                    }
+                }
+            }
+
+            // Upload new gallery images
+            const newGallery = [];
+            for (const file of req.files.product_gallery_image) {
+                const result = await uploadFile(file);
+                newGallery.push({ url: result.url, key: result.key });
+            }
+            product.product_gallery_image = newGallery;
         }
 
         await product.save();
@@ -149,8 +212,36 @@ export const deleteProduct = async (req, res) => {
             return sendNotFoundResponse(res, "Product not found!!!");
         }
 
+        // Delete main image
+        if (product.product_image?.key) {
+            try {
+                await s3.send(new DeleteObjectCommand({
+                    Bucket: process.env.S3_BUCKET_NAME,
+                    Key: product.product_image.key
+                }));
+            } catch (err) {
+                console.error("Failed to delete main image:", err.message);
+            }
+        }
+
+        // Delete gallery images
+        for (const img of product.product_gallery_image) {
+            if (img?.key) {
+                try {
+                    await s3.send(new DeleteObjectCommand({
+                        Bucket: process.env.S3_BUCKET_NAME,
+                        Key: img.key
+                    }));
+                } catch (err) {
+                    console.error("Failed to delete gallery image:", err.message);
+                }
+            }
+        }
+
+        // Delete product from DB
         await ProductModel.findByIdAndDelete(id);
 
+        // Remove reference from seller
         await SellerModel.findByIdAndUpdate(
             product.sellerId,
             { $pull: { products: product._id } }
