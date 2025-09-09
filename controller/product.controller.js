@@ -1,255 +1,173 @@
 import mongoose from "mongoose";
-import {
-    sendBadRequestResponse,
-    sendCreatedResponse,
-    sendErrorResponse,
-    sendNotFoundResponse,
-    sendSuccessResponse
-} from "../utils/Response.utils.js";
-import { ThrowError } from "../utils/Error.utils.js";
-import ProductModel from "../model/product.model.js";
+import { sendBadRequestResponse, sendErrorResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/Response.utils.js";
 import CategoryModel from "../model/category.model.js";
-import SellerModel from "../model/seller.model.js";
+import productModel from "../model/product.model.js";
 import { uploadFile } from "../middleware/imageUpload.js";
 
-// Create a new product
-export const createProduct = async (req, res) => {
+
+//new product Insert
+export const newProductController = async (req, res) => {
     try {
-        const { categoryId, product_name } = req.body;
-        const { id } = req.user;
-
-        if (!categoryId || !product_name) {
-            return sendBadRequestResponse(res, "categoryId & product_name are required!!!");
+        const { id } = req?.user;
+        if (!id && !mongoose.Types.ObjectId.isValid(id)) {
+            return sendBadRequestResponse(res, "Seller Id is required to request");
         }
-
-        if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-            return sendBadRequestResponse(res, "Invalid categoryId");
-        }
-
-        const checkCategory = await CategoryModel.findById(categoryId);
-        if (!checkCategory) {
-            return sendNotFoundResponse(res, "Category not found!!!");
-        }
-
-        // Check if product already exists for this seller
-        const existingProduct = await ProductModel.findOne({
-            product_name,
-            sellerId: id
-        });
-        if (existingProduct) {
-            return sendBadRequestResponse(res, "Product already exists!!!");
-        }
-
-
-        let product_image = { url: null, key: null };
-        let product_gallery_image = [];
-
-        // Single main product image
-        if (req.files?.product_image?.[0]) {
-            const result = await uploadFile(req.files.product_image[0]);
-            product_image = { url: result.url, key: result.key };
-        }
-
-        // Multiple gallery images
-        if (req.files?.product_gallery_image) {
-            for (const file of req.files.product_gallery_image) {
-                const result = await uploadFile(file);
-                product_gallery_image.push({ url: result.url, key: result.key });
-            }
-        }
-
-        const newProduct = await ProductModel.create({
+        const {
             categoryId,
-            product_name,
-            sellerId: id,
-            product_image,
-            product_gallery_image
+            productName,
+            price,
+            originalPrice,
+            discount,
+            totalQuantity,
+            totalUnit,
+            packSizes,
+            productDesc,
+            productHealthBenefit,
+            productStorage
+        } = req.body;
+
+        // === Check mandatory product image ===
+        if (!req.file && !req.files?.productImage) {
+            return sendBadRequestResponse(res, "Product image is required");
+        }
+
+        // === Validations ===
+        if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
+            return sendBadRequestResponse(res, "Invalid or missing categoryId");
+        }
+
+        const categoryExists = await CategoryModel.findById(categoryId);
+        if (!categoryExists) return sendBadRequestResponse(res, "Category not found");
+
+        if (!productName?.trim()) return sendBadRequestResponse(res, "Product name is required");
+
+        if (price == null || isNaN(price) || price < 0) {
+            return sendBadRequestResponse(res, "Valid product price is required");
+        }
+
+        if (originalPrice != null && (isNaN(originalPrice) || originalPrice < 0)) {
+            return sendBadRequestResponse(res, "Original price must be positive");
+        }
+
+        if (discount != null && (isNaN(discount) || discount < 0)) {
+            return sendBadRequestResponse(res, "Discount must be >= 0");
+        }
+
+        if (!totalQuantity || isNaN(totalQuantity) || totalQuantity <= 0) {
+            return sendBadRequestResponse(res, "Total quantity must be greater than 0");
+        }
+
+        const allowedUnits = ["g", "kg", "ml", "l", "pc"];
+        if (!totalUnit || !allowedUnits.includes(totalUnit)) {
+            return sendBadRequestResponse(res, `Invalid total unit. Allowed: ${allowedUnits.join(", ")}`);
+        }
+
+        // === Parse packSizes if provided (expects JSON array) ===
+        let parsedPackSizes = [];
+        if (packSizes) {
+            try {
+                parsedPackSizes = JSON.parse(packSizes);
+                if (!Array.isArray(parsedPackSizes)) {
+                    return sendBadRequestResponse(res, "packSizes must be an array");
+                }
+            } catch (err) {
+                return sendBadRequestResponse(res, "Invalid packSizes format (must be JSON array)");
+            }
+        }
+
+        // === Check for duplicate product ===
+        const duplicateProduct = await productModel.findOne({
+            productName: productName.trim(),
+            price,
+            "totalQuantity.value": totalQuantity,
+            "totalQuantity.unit": totalUnit,
+            packSizes: { $eq: parsedPackSizes } // optional strict match
         });
 
-
-        await SellerModel.findByIdAndUpdate(
-            id,
-            { $push: { products: newProduct._id } }
-        );
-
-        return sendCreatedResponse(res, "Product added successfully", newProduct);
-
-    } catch (error) {
-        console.error("Create Product Error:", error.message);
-        return ThrowError(res, 500, error.message);
-    }
-};
-
-// Get all products
-export const getAllProduct = async (req, res) => {
-    try {
-        const product = await ProductModel.find().populate("categoryId", "category_name");
-        if (!product || product.length === 0) {
-            return sendBadRequestResponse(res, "No Product found", []);
-        }
-        return sendSuccessResponse(res, "Product fetched successfully", product);
-    } catch (error) {
-        return ThrowError(res, 500, error.message);
-    }
-};
-
-// Get product by ID
-export const getProductById = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return sendBadRequestResponse(res, "Invalid Product ID");
+        if (duplicateProduct) {
+            return res.status(409).json({
+                success: false,
+                message: "Duplicate product exists with the same name, price, quantity, and pack sizes"
+            });
         }
 
-        const product = await ProductModel.findById(id).populate("categoryId", "category_name");
-        if (!product) {
-            return sendErrorResponse(res, 404, "Product not found");
+        // === Upload main product image ===
+        let productImg, productImgKey;
+        const mainImageFile = req.files?.productImage?.[0] || req.file;
+        if (mainImageFile) {
+            const result = await uploadFile(mainImageFile);
+            productImg = result.url;
+            productImgKey = result.key;
         }
 
-        return sendSuccessResponse(res, "Product retrieved successfully", product);
-    } catch (error) {
-        return ThrowError(res, 500, error.message);
-    }
-};
-
-// Update product
-export const updateProduct = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { categoryId, product_name } = req.body;
-
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return sendBadRequestResponse(res, "Invalid Product ID");
-        }
-
-        const product = await ProductModel.findById(id);
-        if (!product) {
-            return sendNotFoundResponse(res, "Product not found!!!");
-        }
-
-        if (categoryId) {
-            if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-                return sendBadRequestResponse(res, "Invalid categoryId");
-            }
-            const categoryExists = await CategoryModel.findById(categoryId);
-            if (!categoryExists) {
-                return sendNotFoundResponse(res, "Category not found!!!");
-            }
-            product.categoryId = categoryId;
-        }
-
-        if (product_name) {
-            const productExist = await ProductModel.findOne({ product_name });
-            if (productExist && productExist._id.toString() !== id) {
-                return sendBadRequestResponse(res, "Product name already exists!!!");
-            }
-            product.product_name = product_name;
-        }
-
-        if (req.files?.product_image?.[0]) {
-            const file = req.files.product_image[0];
-            const result = await uploadFile(file);
-
-            // Delete old image from S3
-            if (product.product_image?.key) {
-                try {
-                    await s3.send(new DeleteObjectCommand({
-                        Bucket: process.env.S3_BUCKET_NAME,
-                        Key: product.product_image.key
-                    }));
-                } catch (err) {
-                    console.error("Failed to delete old product image:", err.message);
-                }
-            }
-
-            product.product_image = { url: result.url, key: result.key };
-        }
-
-        if (req.files?.product_gallery_image) {
-            // Delete old gallery images
-            for (const img of product.product_gallery_image) {
-                if (img?.key) {
-                    try {
-                        await s3.send(new DeleteObjectCommand({
-                            Bucket: process.env.S3_BUCKET_NAME,
-                            Key: img.key
-                        }));
-                    } catch (err) {
-                        console.error("Failed to delete old gallery image:", err.message);
-                    }
-                }
-            }
-
-            // Upload new gallery images
-            const newGallery = [];
-            for (const file of req.files.product_gallery_image) {
+        // === Upload gallery images ===
+        let galleryImages = [];
+        if (req.files?.gImage) {
+            for (const file of req.files.gImage) {
                 const result = await uploadFile(file);
-                newGallery.push({ url: result.url, key: result.key });
+                galleryImages.push({ gImage: result.url, gImageKey: result.key });
             }
-            product.product_gallery_image = newGallery;
         }
 
-        await product.save();
-        return sendSuccessResponse(res, "Product updated successfully", product);
+        // === Create new product ===
+        const newProduct = await productModel.create({
+            productName: productName.trim(),
+            category: categoryId,
+            sellerId: id,
+            price,
+            originalPrice,
+            discount: discount || 0,
+            totalQuantity: { value: totalQuantity, unit: totalUnit },
+            packSizes: parsedPackSizes,
+            productDesc: productDesc || "",
+            productImage: productImg,
+            productImageKey: productImgKey,
+            gImage: galleryImages,
+            productHealthBenefit: productHealthBenefit || "",
+            productStorage: productStorage || ""
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "Product created successfully",
+            product: newProduct
+        });
 
     } catch (error) {
-        return ThrowError(res, 500, error.message);
+        console.error("Error while inserting new product:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Error while inserting new product",
+            error: error.message
+        });
     }
 };
 
-// Delete product
-export const deleteProduct = async (req, res) => {
+//get All products
+export const getAllProductsController = async (req, res) => {
     try {
-        const { id  } = req.params;
+        const products = await productModel.find({}).populate("category");
 
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return sendBadRequestResponse(res, "Invalid Product ID");
+        if (!products) {
+            return sendNotFoundResponse(res, "Not Product Found!");
         }
 
-        const product = await ProductModel.findById(id);
-        if (!product) {
-            return sendNotFoundResponse(res, "Product not found!!!");
-        }
-
-        // Delete main image
-        if (product.product_image?.key) {
-            try {
-                await s3.send(new DeleteObjectCommand({
-                    Bucket: process.env.S3_BUCKET_NAME,
-                    Key: product.product_image.key
-                }));
-            } catch (err) {
-                console.error("Failed to delete main image:", err.message);
-            }
-        }
-
-        // Delete gallery images
-        for (const img of product.product_gallery_image) {
-            if (img?.key) {
-                try {
-                    await s3.send(new DeleteObjectCommand({
-                        Bucket: process.env.S3_BUCKET_NAME,
-                        Key: img.key
-                    }));
-                } catch (err) {
-                    console.error("Failed to delete gallery image:", err.message);
-                }
-            }
-        }
-
-        // Delete product from DB
-        await ProductModel.findByIdAndDelete(id);
-
-        // Remove reference from seller
-        await SellerModel.findByIdAndUpdate(
-            product.sellerId,
-            { $pull: { products: product._id } }
-        );
-
-        return sendSuccessResponse(res, "Product deleted successfully", null);
-
+        return sendSuccessResponse(res, "All product Fetched Successfully", {
+            total: products.length,
+            products: products
+        })
     } catch (error) {
-        return ThrowError(res, 500, error.message);
+        console.log("Error during Fetching All Products");
+        return sendErrorResponse(res, 500, "Error During Fetching All products", error);
     }
 };
+
+//get product by catgory id & short product info
+export const getProductByCategoryController = async (req, res) => {
+    try {
+
+    } catch (error) {
+        console.log("error during Fetch Product By catgory (short)");
+        return sendErrorResponse(res, 500, "Error During Fetch Product By category")
+    }
+}

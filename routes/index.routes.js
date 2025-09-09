@@ -2,10 +2,10 @@ import express from 'express';
 import { AuthController } from '../controller/auth.controller.js';
 import { newSellerController, verifySellerMobileOtpController, sellerLoginController, sellerForgetPasswordController, sellerVerifyForgetOtpController, sellerPasswordResetController, sellerGstVerifyAndInsertController, setSellerBusinessAddressController, sellerGstResetOtpController, sellerBrandInfoAddController, sellerBankInfoSetController, sellerPickUpAddressSetController, trueSellerAgreementController, getAllSeller, getSeller } from '../controller/seller.controller.js';
 import { CategoryController } from '../controller/category.controller.js';
-import { isAdmin, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
+import { sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/imageUpload.js';
-import { createProduct, deleteProduct, getAllProduct, getProductById, updateProduct } from '../controller/product.controller.js';
-import { getProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
+import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
+import { getAllProductsController, getProductByCategoryController, newProductController } from '../controller/product.controller.js';
 
 const indexRouter = express.Router();
 
@@ -33,19 +33,16 @@ indexRouter.post("/seller/verify/forget/password", sellerVerifyForgetOtpControll
 indexRouter.post("/seller/reset/password", sellerPasswordResetController);
 
 // Category 
-indexRouter.post("/createCategory", UserAuth, upload.single("category_image"), CategoryController.createCategory)
+indexRouter.post("/createCategory", sellerAuth, upload.single("category_image"), CategoryController.createCategory)
 indexRouter.get("/getAllCategory", CategoryController.getAllCategory)
 indexRouter.get("/getCategoryById/:id", CategoryController.getCategoryById)
-indexRouter.put("/updateCategory/:id", UserAuth, upload.single("category_image"), CategoryController.updateCategory)
-indexRouter.delete("/deleteCategory/:id", UserAuth, CategoryController.deleteCategory)
+indexRouter.put("/updateCategory/:id", sellerAuth, upload.single("category_image"), CategoryController.updateCategory)
+indexRouter.delete("/deleteCategory/:id", sellerAuth, CategoryController.deleteCategory)
 
 // Product
-indexRouter.post("/createProduct", sellerAuth, upload.fields([{ name: "product_image", maxCount: 1 }, { name: "product_gallery_image", maxCount: 5 }]), createProduct)
-indexRouter.get("/getAllProduct", getAllProduct)
-indexRouter.get("/getProductById/:id", getProductById)
-indexRouter.put("/updateProduct/:id", sellerAuth, upload.fields([{ name: "product_image", maxCount: 1 }, { name: "product_gallery_image", maxCount: 5 }]), updateProduct)
-indexRouter.delete("/deleteProduct/:id", sellerAuth, deleteProduct)
-
+indexRouter.post("/new/product", sellerAuth, upload.fields([{ name: "productImage", maxCount: 1 }, { name: "gImage", maxCount: 5 }]), newProductController);
+indexRouter.get("/all/products", getAllProductsController); // *
+indexRouter.get("/get/short/productBycategory/:categoryId", getProductByCategoryController);
 
 //seller.kyc.router.js
 indexRouter.post("/seller/gst/verify", sellerAuth, sellerGstVerifyAndInsertController);
@@ -72,12 +69,12 @@ indexRouter.post("/user/address", UserAuth, userAddressAddController);
 indexRouter.patch("/user/address/update/:addressId", UserAuth, userAddressUpdatecontroller);
 indexRouter.delete("/user/address/delete/:addressId", UserAuth, userAddressDeleteController);
 indexRouter.get("/user/address", UserAuth, getUserAddressController);
-
 //change password
 indexRouter.post("/user/change/password", UserAuth, userPasswordChangeController);
-
-//delet Account
+//delete Account
 indexRouter.delete("/user/remove/account", UserAuth, userRemoveAccountController);
+//seller.profile
+indexRouter.get("/seller/profile", sellerAuth, getSellerProfileController)
 
 //admin api
 indexRouter.get("/getAllnewUser", AuthController.getAllnewUser)
