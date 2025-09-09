@@ -5,7 +5,7 @@ import { CategoryController } from '../controller/category.controller.js';
 import { sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/imageUpload.js';
 import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
-import { getAllProductsController, getProductByCategoryController, newProductController } from '../controller/product.controller.js';
+import { filterProductController, getAllProductsController, getProductByCategoryController, getProductDetailController, newProductController, searchProductController } from '../controller/product.controller.js';
 
 const indexRouter = express.Router();
 
@@ -43,6 +43,10 @@ indexRouter.delete("/deleteCategory/:id", sellerAuth, CategoryController.deleteC
 indexRouter.post("/new/product", sellerAuth, upload.fields([{ name: "productImage", maxCount: 1 }, { name: "gImage", maxCount: 5 }]), newProductController);
 indexRouter.get("/all/products", getAllProductsController); // *
 indexRouter.get("/get/short/productBycategory/:categoryId", getProductByCategoryController);
+indexRouter.get("/get/product/detail/:productId", getProductDetailController)
+indexRouter.get("/search", searchProductController);
+indexRouter.get("/filter",filterProductController)
+
 
 //seller.kyc.router.js
 indexRouter.post("/seller/gst/verify", sellerAuth, sellerGstVerifyAndInsertController);
