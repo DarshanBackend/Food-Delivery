@@ -144,7 +144,7 @@ export const getSeller = async (req, res) => {
     } catch (error) {
         console.error("Seller fetch Error:", error.message);
         return ThrowError(res, 500, error.message);
-    }   
+    }
 };
 
 //verify mobile otp while register
@@ -682,6 +682,48 @@ export const setSellerBusinessAddressController = async (req, res) => {
     }
 }
 
+export const verifySellerOtpController = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        if (!email || !otp) {
+            return sendBadRequestResponse(res, "Email and OTP are required!");
+        }
+
+        // 🔎 Find seller
+        const seller = await sellerModel.findOne({ email });
+        if (!seller) {
+            return sendNotFoundResponse(res, "Seller not found!");
+        }
+
+        // 🔐 Check OTP exist
+        if (!seller.otp) {
+            return sendBadRequestResponse(res, "No OTP found for this seller. Please request again!");
+        }
+
+        // Match check
+        if (otp !== seller.otp) {
+            return sendBadRequestResponse(res, "Invalid OTP. Please try again!");
+        }
+
+        // ✅ OTP Verified → clear field
+        seller.otp = null;
+        seller.isVerified = true; // optional flag
+        await seller.save();
+
+        return sendSuccessResponse(res, "✅ OTP Verified Successfully!", {
+            email: seller.email,
+            businessName: seller.businessName,
+            panNumber: seller.panNumber,
+            verified: true
+        });
+
+    } catch (error) {
+        console.error("Error verifying seller OTP:", error.message);
+        return sendErrorResponse(res, 500, "Something went wrong while verifying OTP!", error.message);
+    }
+};
+
 export const sellerGstResetOtpController = async (req, res) => {
     try {
         const { id } = req?.user; // or req.body.id depending on your route
@@ -862,7 +904,6 @@ export const sellerBankInfoSetController = async (req, res) => {
     }
 };
 
-
 export const sellerPickUpAddressSetController = async (req, res) => {
     try {
         const { houseNo, street, landmark, pincode, city, state } = req.body;
@@ -907,7 +948,6 @@ export const sellerPickUpAddressSetController = async (req, res) => {
         return sendErrorResponse(res, "Error while inserting pick-up address!");
     }
 };
-
 
 export const trueSellerAgreementController = async (req, res) => {
     try {
