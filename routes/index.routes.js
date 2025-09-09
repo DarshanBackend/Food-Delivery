@@ -5,7 +5,7 @@ import { CategoryController } from '../controller/category.controller.js';
 import { isAdmin, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { processAndUploadMedia, upload, uploadMedia } from '../middleware/imageUpload.js';
 import { createProduct, deleteProduct, getAllProduct, getProductById, updateProduct } from '../controller/product.controller.js';
-import { getProfileController, userAddressAddController, userAddressUpdatecontroller, userProfileUpdateController } from '../controller/profile.controller.js';
+import { getProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
 
 const indexRouter = express.Router();
 
@@ -66,9 +66,17 @@ indexRouter.post('/seller/agreement', sellerAuth, trueSellerAgreementController)
 indexRouter.get("/user/profile", UserAuth, getProfileController);
 //update email,name,mobile No,avatar;
 indexRouter.patch("/user/profile/update", UserAuth, upload.single("avatar"), userProfileUpdateController);
-//add address
+
+//user address
 indexRouter.post("/user/address", UserAuth, userAddressAddController);
-//update Addree
 indexRouter.patch("/user/address/update/:addressId", UserAuth, userAddressUpdatecontroller);
+indexRouter.delete("/user/address/delete/:addressId", UserAuth, userAddressDeleteController);
+indexRouter.get("/user/address", UserAuth, getUserAddressController);
+
+//change password
+indexRouter.post("/user/change/password", UserAuth, userPasswordChangeController);
+
+//delet Account
+indexRouter.delete("/user/remove/account", UserAuth, userRemoveAccountController);
 
 export default indexRouter;

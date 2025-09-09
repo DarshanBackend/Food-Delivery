@@ -138,7 +138,7 @@ export const updateProduct = async (req, res) => {
 // Delete product
 export const deleteProduct = async (req, res) => {
     try {
-        const { id } = req.params;
+        const { id  } = req.params;
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid Product ID");

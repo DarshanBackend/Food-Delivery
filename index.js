@@ -53,5 +53,5 @@ app.use("/api", IndexRoute)
 
 //server listing
 app.listen(PORT, () => {
-    console.log(`Server iS Running On PORT : ${PORT}`);
+    console.log(`✅ Server iS Running On PORT : ${PORT}`);
 })

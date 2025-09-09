@@ -3,6 +3,7 @@ import { sendBadRequestResponse, sendErrorResponse, sendNotFoundResponse, sendSu
 import UserModel from "../model/user.model.js";
 import { uploadFile } from "../middleware/imageUpload.js";
 import axios from "axios";
+import bcrypt from 'bcryptjs';
 
 export const getProfileController = async (req, res) => {
     try {
@@ -128,8 +129,9 @@ export const userAddressAddController = async (req, res) => {
         return sendErrorResponse(res, 500, "Something went wrong while adding address!", error.message);
     }
 };
-//update user address controller
 
+//update user address controller
+//address have many so thir indivual  index id pass and update
 export const userAddressUpdatecontroller = async (req, res) => {
     try {
         const { id } = req?.user; // userId from auth token
@@ -199,3 +201,120 @@ export const userAddressUpdatecontroller = async (req, res) => {
     }
 };
 
+export const userAddressDeleteController = async (req, res) => {
+    try {
+        const { id } = req?.user;
+        const { addressId } = req?.params;
+
+        if (!id && !mongoose.Types.ObjectId.isValid(id)) {
+            return sendBadRequestResponse(res, "User Id And token Id Not FOUND!!");
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(addressId) && !req.params) {
+            return sendBadRequestResponse(res, "address Id or Req.params Are required tO request!");
+        }
+
+        //delete Address
+
+        const deleteUserAddress = await UserModel.findByIdAndUpdate(
+            id,
+            { $pull: { address: { _id: addressId } } },
+            { new: true }
+        );
+
+        if (!deleteUserAddress) {
+            return sendNotFoundResponse(res, "User Not Found");
+        }
+
+        return sendSuccessResponse(res, "Address deleted successfully", deleteUserAddress);
+
+    } catch (error) {
+        console.log("Error while Delete User address" + error.message);
+        return sendErrorResponse(res, 500, "Error During! Delete User Address!", error);
+    }
+}
+
+export const getUserAddressController = async (req, res) => {
+    try {
+        const { id } = req?.user;
+        if (!id && !mongoose.Types.ObjectId.isValid(id)) {
+            return sendBadRequestResponse(res, "user _id not found! by Token");
+        }
+
+        const address = await UserModel.find({ _id: id }).select("address");
+
+        if (!address && address.length === 0) {
+            return sendNotFoundResponse(res, "No Address Found For you!!");
+        }
+
+        return sendSuccessResponse(res, "User Address Fetch Successfully", {
+            total: address.length,
+            address: address
+        })
+
+    } catch (error) {
+        console.log("Error While Get user Address" + error.message);
+        return sendErrorResponse(res, 500, "Error while Get User Address", error);
+    }
+}
+
+export const userPasswordChangeController = async (req, res) => {
+    try {
+        const { id } = req?.user;
+        const { oldPassword, newPassword } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return sendBadRequestResponse(res, "Invalid userId");
+        }
+
+        if (!oldPassword || !newPassword) {
+            return sendBadRequestResponse(res, "Old password and new password required");
+        }
+
+        const user = await UserModel.findById(id).select("password"); // make sure password is selected
+
+        if (!user) {
+            return sendBadRequestResponse(res, "User not found");
+        }
+
+        // Compare old password
+        const isMatch = await bcrypt.compare(oldPassword, user.password);
+        if (!isMatch) {
+            return sendBadRequestResponse(res, "Old password is incorrect");
+        }
+
+        // Hash new password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        user.password = hashedPassword;
+        await user.save();
+
+        return sendSuccessResponse(res, "Password changed successfully");
+    } catch (error) {
+        console.error("Change Password Error:", error);
+        return sendErrorResponse(res, 500, "Something went wrong while changing password", error);
+    }
+}
+
+export const userRemoveAccountController = async (req, res) => {
+    try {
+        const { id } = req?.user;
+        if (!id && !mongoose.Types.ObjectId.isValid(id)) {
+            return sendBadRequestResponse(res, "User Id And token Id Not FOUND!!");
+        }
+
+        const removeUser = await UserModel.findByIdAndDelete({ _id: id });
+
+        if (!removeUser) {
+            return sendNotFoundResponse(res, "User Account Not Found");
+        }
+
+        return sendSuccessResponse(res, "User Account Delete SuccessFullY! ", removeUser);
+
+
+    } catch (error) {
+        console.log("Erro while User Accounr Remove" + error.message);
+        return sendErrorResponse(res, 500, "Error while Delete User Account!", error)
+    }
+}
