@@ -125,12 +125,14 @@ export const newProductController = async (req, res) => {
             productImageKey: productImgKey,
             gImage: galleryImages,
             productHealthBenefit: productHealthBenefit || "",
-            productStorage: productStorage || ""
+            productStorage: productStorage || "",
+            inStock: totalQuantity > 0,   // automatically set inStock based on quantity
+            soldCount: 0
         });
 
 
         // save all product id in seller collection
-        const sellerProduct = await sellerModel.findByIdAndUpdate(
+        await sellerModel.findByIdAndUpdate(
             { _id: id },
             { $push: { products: newProduct._id } },
             { new: true }
@@ -177,14 +179,244 @@ export const getProductByCategoryController = async (req, res) => {
     try {
         const { categoryId } = req?.params;
 
-        if (!categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
-            return sendBadRequestResponse(res, "catgoey iD is Required!");
+        if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
+            return sendBadRequestResponse(res, "Category ID is required!");
         }
 
-        const product = await productModel.find({ category: categoryId }).select("productImage productName price originalPrice discount packSizes[0]")
-        return res.json(product)
+        let products = await productModel
+            .find({ category: categoryId })
+            .select("productImage productName price originalPrice discount packSizes");
+
+        if (!products && !products.length !== 0) {
+            return sendBadRequestResponse("Product Not Found");
+        }
+
+        // Transform response: only first packSize
+        const formattedProducts = products.map(product => ({
+            _id: product._id,
+            productName: product.productName,
+            price: product.price,
+            originalPrice: product.originalPrice,
+            discount: product.discount,
+            productImage: product.productImage,
+            packSizes: product.packSizes.length > 0
+                ? [{
+                    weight: product.packSizes[0].weight,
+                    unit: product.packSizes[0].unit
+                }]
+                : [] // empty array if no packSizes
+        }));
+
+        return sendSuccessResponse(res, "Products Fetched SuccessFully", {
+            total: formattedProducts.length,
+            products: formattedProducts
+        });
+
     } catch (error) {
-        console.log("error during Fetch Product By catgory (short)");
-        return sendErrorResponse(res, 500, "Error During Fetch Product By category", error)
+        console.log("error during Fetch Product By category (short)", error);
+        return sendErrorResponse(res, 500, "Error During Fetch Product By category", error);
+    }
+};
+
+//get Product By Category
+export const getProductDetailController = async (req, res) => {
+    try {
+        const { productId } = req?.params;
+
+        if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+            return sendBadRequestResponse(res, "Category ID is required!");
+        }
+
+        let products = await productModel
+            .find({ _id: productId })
+
+        if (!products && !products.length !== 0) {
+            return sendBadRequestResponse("Product Not Found");
+        }
+
+        return sendSuccessResponse(res, "Products details Fetched SuccessFully", {
+            total: products.length,
+            shareLink: "",
+            products: products
+        });
+
+    } catch (error) {
+        console.log("error during Fetch Product Details (long)", error);
+        return sendErrorResponse(res, 500, "Error During Fetch Product Details", error);
     }
 }
+
+//search controler by price,orinalPrice,discount,productName,catgory serach work
+export const searchProductController = async (req, res) => {
+    try {
+        const { q } = req?.query;
+
+        if (!q) {
+            return sendErrorResponse(res, 400, "Search query is required");
+        }
+
+        // Escape regex special chars
+        const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const regex = new RegExp(escaped, "i");
+
+        // --- Base search conditions ---
+        const searchConditions = [
+            { productName: regex },
+
+            // price like '%q%'
+            {
+                $expr: {
+                    $regexMatch: {
+                        input: { $toString: "$price" },
+                        regex: regex
+                    }
+                }
+            },
+
+            // originalPrice like '%q%'
+            {
+                $expr: {
+                    $regexMatch: {
+                        input: { $toString: "$originalPrice" },
+                        regex: regex
+                    }
+                }
+            },
+
+            // discount like '%q%'
+            {
+                $expr: {
+                    $regexMatch: {
+                        input: { $toString: "$discount" },
+                        regex: regex
+                    }
+                }
+            }
+        ];
+
+        // --- Category search ---
+        const categories = await CategoryModel.find({ category_name: regex }).select("_id");
+        if (categories.length > 0) {
+            const categoryIds = categories.map(c => c._id);
+            searchConditions.push({ category: { $in: categoryIds } });
+        }
+
+        // Query products
+        const products = await productModel.find({
+            $or: searchConditions
+        }).populate("category", "category_name");
+
+        return sendSuccessResponse(res, "Products fetched successfully", {
+            total: products.length,
+            products
+        });
+
+    } catch (error) {
+        console.error("Error during Search product Controller:", error);
+        return sendErrorResponse(res, 500, "Error during Search product Controller", error);
+    }
+};
+
+//filter product
+export const filterProductController = async (req, res) => {
+    try {
+        const {
+            categories,       // array of category IDs or names
+            priceRange,       // { min, max }
+            discountRange,    // { min, max }
+            sortBy,           // "priceHigh" | "priceLow" | "recent" | "popular"
+            search,           // optional search string
+            inStock,          // true/false
+            page = 1,         // default 1
+            limit = 20        // default 20
+        } = req.body;
+
+        const filter = {};
+
+        // --- Category filter ---
+        if (categories && categories.length > 0) {
+            // If sending category names instead of IDs
+            const categoryDocs = await CategoryModel.find({ category_name: { $in: categories } }, "_id")
+            const categoryIds = categoryDocs.map(c => c._id);
+            filter.category = { $in: categoryIds };
+        }
+
+        // --- Price filter ---
+        if (priceRange) {
+            filter.$or = [
+                { price: { ...(priceRange.min !== undefined && { $gte: priceRange.min }), ...(priceRange.max !== undefined && { $lte: priceRange.max }) } },
+                { "packSizes.price": { ...(priceRange.min !== undefined && { $gte: priceRange.min }), ...(priceRange.max !== undefined && { $lte: priceRange.max }) } }
+            ];
+        }
+
+        // --- Discount filter ---
+        if (discountRange) {
+            filter.$or = [
+                { discount: { ...(discountRange.min !== undefined && { $gte: discountRange.min }), ...(discountRange.max !== undefined && { $lte: discountRange.max }) } },
+                { "packSizes.discount": { ...(discountRange.min !== undefined && { $gte: discountRange.min }), ...(discountRange.max !== undefined && { $lte: discountRange.max }) } }
+            ];
+        }
+
+        // --- Stock filter ---
+        if (inStock !== undefined) {
+            filter.inStock = inStock;
+        }
+
+        // --- Search filter ---
+        if (search) {
+            filter.$or = [
+                { productName: { $regex: search, $options: "i" } },
+                { productDesc: { $regex: search, $options: "i" } }
+            ];
+        }
+
+        // --- Sorting ---
+        let sort = {};
+        switch (sortBy) {
+            case "priceHigh":
+                sort = { price: -1 };
+                break;
+            case "priceLow":
+                sort = { price: 1 };
+                break;
+            case "recent":
+                sort = { createdAt: -1 };
+                break;
+            case "popular":
+                sort = { soldCount: -1 };
+                break;
+            default:
+                sort = { createdAt: -1 };
+        }
+
+        // --- Pagination ---
+        const skip = (page - 1) * limit;
+
+        // --- Fetch products ---
+        const products = await productModel.find(filter)
+            .populate("category", "category_name")
+            .sort(sort)
+            .skip(skip)
+            .limit(limit);
+
+        // --- Total count for pagination ---
+        const total = await productModel.countDocuments(filter);
+
+        return res.status(200).json({
+            success: true,
+            total,
+            page,
+            limit,
+            products
+        });
+
+    } catch (error) {
+        console.error("Error in filterProductController:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Error filtering products",
+            error: error.message
+        });
+    }
+};
+

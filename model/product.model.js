@@ -30,6 +30,7 @@ const productSchema = new mongoose.Schema({
         ref: "seller",
         required: [true, "seller id is required"]
     },
+    inStock: { type: Boolean, default: true }, // automatically update when stock changes
     // Base product pricing (optional, can be used as reference)
     price: { type: Number, default: null },
     originalPrice: { type: Number, default: null },
@@ -44,10 +45,14 @@ const productSchema = new mongoose.Schema({
             required: true
         }
     },
-
+    soldCount: { type: Number, default: 0 },
     // User-side: available pack sizes
     packSizes: [packSizeSchema],
-
+    currency: {
+        type: String,
+        enum: ["USD", "INR", "AED", "NZD"],
+        default: "USD"
+    },
     productDesc: { type: String, default: null },
 
     productImage: { type: String, default: null },
