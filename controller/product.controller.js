@@ -420,3 +420,40 @@ export const filterProductController = async (req, res) => {
     }
 };
 
+//get Pack Size By Id Controller
+export const getPackSizeByIdController = async (req, res) => {
+    try {
+        const { packSizeId } = req.params;
+
+        if (!packSizeId || !mongoose.Types.ObjectId.isValid(packSizeId)) {
+            return sendErrorResponse(res, 400, "Valid packSizeId is required");
+        }
+
+        // Find product and the matching packSize
+        const product = await productModel.findOne(
+            { "packSizes._id": packSizeId },
+            { "packSizes.$": 1, productName: 1, categoryName: 1, price: 1, originalPrice: 1 }
+        );
+
+        if (!product || !product.packSizes || product.packSizes.length === 0) {
+            return sendErrorResponse(res, 404, "PackSize not found");
+        }
+
+        const packSize = product.packSizes[0];
+
+        // Merge product + packSize info
+        const responseData = {
+            productId: product._id,
+            productName: product.productName,
+            categoryName: product.category,
+            basePrice: product.price,
+            originalPrice: product.originalPrice,
+            packSize: packSize
+        };
+
+        return sendSuccessResponse(res, "PackSize with product fetched successfully", responseData);
+    } catch (error) {
+        console.error("Error in getPackSizeByIdController:", error);
+        return sendErrorResponse(res, 500, "Internal server error");
+    }
+};

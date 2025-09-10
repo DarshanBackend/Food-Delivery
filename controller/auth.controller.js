@@ -228,13 +228,14 @@ export class AuthController {
                     mobileNo: user.mobileNo
                 });
             }
+            
+            user.otp = undefined;
 
             // If both failed → invalid OTP
             return res.status(400).json({
                 success: false,
                 message: "Invalid OTP"
             });
-
         } catch (error) {
             console.error("OTP Verification Error:", error.message);
             return res.status(500).json({
