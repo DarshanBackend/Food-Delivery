@@ -5,7 +5,8 @@ import { CategoryController } from '../controller/category.controller.js';
 import { sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/imageUpload.js';
 import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
-import { filterProductController, getAllProductsController, getProductByCategoryController, getProductDetailController, newProductController, searchProductController } from '../controller/product.controller.js';
+import { filterProductController, getAllProductsController, getPackSizeByIdController, getProductByCategoryController, getProductDetailController, newProductController, searchProductController } from '../controller/product.controller.js';
+import { addToCartController, deleteCartItemController, getMyCartController } from '../controller/cart.controller.js';
 
 const indexRouter = express.Router();
 
@@ -45,7 +46,8 @@ indexRouter.get("/all/products", getAllProductsController); // *
 indexRouter.get("/get/short/productBycategory/:categoryId", getProductByCategoryController);
 indexRouter.get("/get/product/detail/:productId", getProductDetailController)
 indexRouter.get("/search", searchProductController);
-indexRouter.get("/filter",filterProductController)
+indexRouter.get("/filter", filterProductController);
+indexRouter.get("/packSize/:packSizeId", getPackSizeByIdController);
 
 
 //seller.kyc.router.js
@@ -74,6 +76,12 @@ indexRouter.post("/user/address", UserAuth, userAddressAddController);
 indexRouter.patch("/user/address/update/:addressId", UserAuth, userAddressUpdatecontroller);
 indexRouter.delete("/user/address/delete/:addressId", UserAuth, userAddressDeleteController);
 indexRouter.get("/user/address", UserAuth, getUserAddressController);
+
+//cart.route.js
+indexRouter.post("/add/cart/:productId", UserAuth, addToCartController);
+indexRouter.get("/my/cart", UserAuth, getMyCartController)
+// indexRouter.patch("/update/my/cart",UserAuth,updateCartItemController)
+indexRouter.delete("/delete/item/:cartItemId", UserAuth, deleteCartItemController)
 
 
 //change password
