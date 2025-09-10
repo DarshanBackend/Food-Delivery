@@ -47,7 +47,7 @@ export const getAllCoupon = async (req, res) => {
     }
 }
 
-export const getCouponById = async (req, res) {
+export const getCouponById = async (req, res) =>{
     try {
         const { id } = req.params;
 
@@ -74,7 +74,6 @@ export const updateCoupon = async (req, res) => {
             return sendBadRequestResponse(res, "Invalid CouponId")
         }
 
-        const updateCoupon =
 
     } catch (error) {
         return ThrowError(res, 500, error.message)
