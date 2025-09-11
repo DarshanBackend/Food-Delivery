@@ -47,7 +47,7 @@ export const getAllCoupon = async (req, res) => {
     }
 }
 
-export const getCouponById = async (req, res) =>{
+export const getCouponById = async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -74,7 +74,37 @@ export const updateCoupon = async (req, res) => {
             return sendBadRequestResponse(res, "Invalid CouponId")
         }
 
+        const checkCoupon = await CouponModel.findById(id)
+        if (!checkCoupon) {
+            return sendNotFoundResponse(res, "Coupon not found!!!")
+        }
 
+        const updateCoupon = (req.body)
+        const newCoupon = await CouponModel.findByIdAndUpdate(id, updateCoupon, { new: true })
+
+        return sendSuccessResponse(res, "Coupon updated Successfully...", newCoupon)
+
+    } catch (error) {
+        return ThrowError(res, 500, error.message)
+    }
+}
+
+export const deleteCoupon = async (req, res) => {
+    try {
+        const { id } = req.params
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return sendBadRequestResponse(res, "Invalid CouponId")
+        }
+
+        const checkCoupon = await CouponModel.findById(id)
+        if (!checkCoupon) {
+            return sendNotFoundResponse(res, "Coupon Not found!!!")
+        }
+
+        await CouponModel.findByIdAndDelete(id)
+
+        return sendSuccessResponse(res, "Coupon deleted Successfully...")
     } catch (error) {
         return ThrowError(res, 500, error.message)
     }
