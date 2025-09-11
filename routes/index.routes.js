@@ -6,9 +6,10 @@ import { isUser, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/imageUpload.js';
 import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
 import { filterProductController, getAllProductsController, getPackSizeByIdController, getProductByCategoryController, getProductDetailController, newProductController, searchProductController } from '../controller/product.controller.js';
-import { addToCartController, deleteCartItemController, getMyCartController } from '../controller/cart.controller.js';
+import { addToCartController, deleteCartItemController, getMyCartController, updateCartItemController } from '../controller/cart.controller.js';
 import { createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
-import { createPayment, deletePayment, getAllPayment, getPaymentById, getUserPayment, updatePayment } from '../controller/payment.controller.js';
+import { makeNewPaymentController } from '../controller/payment.controller.js';
+import { myOrderController, newOrderController, selectUserAddressController, updateMyOrderController } from '../controller/order.controller.js';
 
 const indexRouter = express.Router();
 
@@ -76,13 +77,13 @@ indexRouter.patch("/user/profile/update", UserAuth, upload.single("avatar"), use
 //user address
 indexRouter.post("/user/address", UserAuth, userAddressAddController);
 indexRouter.patch("/user/address/update/:addressId", UserAuth, userAddressUpdatecontroller);
-indexRouter.delete("/user/address/delete/:addressId", UserAuth, userAddressDeleteController);
+indexRouter.delete("/user/address/delete/:addressId", UserAuth, updateCartItemController);
 indexRouter.get("/user/address", UserAuth, getUserAddressController);
 
 //cart.route.js
 indexRouter.post("/add/cart/:productId", UserAuth, addToCartController);
 indexRouter.get("/my/cart", UserAuth, getMyCartController)
-// indexRouter.patch("/update/my/cart",UserAuth,updateCartItemController)
+indexRouter.patch("/update/cart/:productId", UserAuth, updateCartItemController)
 indexRouter.delete("/delete/item/:cartItemId", UserAuth, deleteCartItemController)
 
 
@@ -107,11 +108,29 @@ indexRouter.patch("/seller/updateCoupon/:id", sellerAuth, updateCoupon)
 indexRouter.delete("/seller/deleteCoupon/:id", sellerAuth, deleteCoupon)
 
 // Payment
-indexRouter.post("/user/createPayment", UserAuth, isUser, createPayment)
-indexRouter.get("/getAllPayment", UserAuth, getAllPayment)
-indexRouter.get("/getPaymentById/:id", UserAuth, getPaymentById)
-indexRouter.get("/getUserPayment", UserAuth, getUserPayment)
-indexRouter.patch("/user/updatePayment/:id", UserAuth, updatePayment)
-indexRouter.delete("/user/deletePayment/:id", UserAuth, deletePayment)
+// indexRouter.post("/user/createPayment", UserAuth, isUser, createPayment)
+// indexRouter.get("/getAllPayment", UserAuth, getAllPayment)
+// indexRouter.get("/getPaymentById/:id", UserAuth, getPaymentById)
+// indexRouter.get("/getUserPayment", UserAuth, getUserPayment)
+// indexRouter.patch("/user/updatePayment/:id", UserAuth, updatePayment)
+// indexRouter.delete("/user/deletePayment/:id", UserAuth, deletePayment)
+
+
+
+//order.routes.js
+indexRouter.put("/users/select-address/:addressId", UserAuth, selectUserAddressController)
+indexRouter.post("/new/order", UserAuth, newOrderController)
+indexRouter.patch("/update/myorder/:orderId", UserAuth, updateMyOrderController);
+
+
+
+
+
+
+// payment.route.js
+// make payment
+
+indexRouter.post("/new/payment", UserAuth, makeNewPaymentController);
+indexRouter.get("/my/order", UserAuth, myOrderController)
 
 export default indexRouter;

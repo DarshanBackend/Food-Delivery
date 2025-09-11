@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 
-const UserAddressSchema = new mongoose.Schema({
+export const UserAddressSchema = new mongoose.Schema({
     firstName: { type: String, trim: true, default: null },
     lastName: { type: String, trim: true, default: null },
     phone: {
@@ -59,6 +59,11 @@ const UserSchema = new mongoose.Schema({
         default: "user"
     },
     address: [UserAddressSchema],
+    selectedAddress: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "user.address",
+        default: null
+    },
     uid: { type: String, default: null },
     avatar: { type: String, default: null },
     otp: { type: Number, default: null },
