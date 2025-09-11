@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const couponSchema = mongoose.Schema({
     name: {
-        type: String1
+        type: String
     },
     description: {
         type: String

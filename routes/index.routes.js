@@ -2,11 +2,13 @@ import express from 'express';
 import { AuthController } from '../controller/auth.controller.js';
 import { newSellerController, verifySellerMobileOtpController, sellerLoginController, sellerForgetPasswordController, sellerVerifyForgetOtpController, sellerPasswordResetController, sellerGstVerifyAndInsertController, setSellerBusinessAddressController, sellerGstResetOtpController, sellerBrandInfoAddController, sellerBankInfoSetController, sellerPickUpAddressSetController, trueSellerAgreementController, getAllSeller, getSeller, verifySellerOtpController } from '../controller/seller.controller.js';
 import { CategoryController } from '../controller/category.controller.js';
-import { sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
+import { isUser, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/imageUpload.js';
 import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
 import { filterProductController, getAllProductsController, getPackSizeByIdController, getProductByCategoryController, getProductDetailController, newProductController, searchProductController } from '../controller/product.controller.js';
 import { addToCartController, deleteCartItemController, getMyCartController } from '../controller/cart.controller.js';
+import { createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
+import { createPayment, deletePayment, getAllPayment, getPaymentById, getUserPayment, updatePayment } from '../controller/payment.controller.js';
 
 const indexRouter = express.Router();
 
@@ -96,5 +98,20 @@ indexRouter.get("/getAllnewUser", AuthController.getAllnewUser)
 indexRouter.get("/getUser", UserAuth, AuthController.getUser)
 indexRouter.get("/getAllSeller", getAllSeller)
 indexRouter.get("/getSeller", sellerAuth, getSeller)
+
+// Coupon
+indexRouter.post("/seller/createCoupon", sellerAuth, createCoupon)
+indexRouter.get("/getAllCoupon", UserAuth, getAllCoupon)
+indexRouter.get("/getCouponById/:id", UserAuth, getCouponById)
+indexRouter.patch("/seller/updateCoupon/:id", sellerAuth, updateCoupon)
+indexRouter.delete("/seller/deleteCoupon/:id", sellerAuth, deleteCoupon)
+
+// Payment
+indexRouter.post("/user/createPayment", UserAuth, isUser, createPayment)
+indexRouter.get("/getAllPayment", UserAuth, getAllPayment)
+indexRouter.get("/getPaymentById/:id", UserAuth, getPaymentById)
+indexRouter.get("/getUserPayment", UserAuth, getUserPayment)
+indexRouter.patch("/user/updatePayment/:id", UserAuth, updatePayment)
+indexRouter.delete("/user/deletePayment/:id", UserAuth, deletePayment)
 
 export default indexRouter;
