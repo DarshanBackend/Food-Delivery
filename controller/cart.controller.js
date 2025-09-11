@@ -151,63 +151,63 @@ export const getMyCartController = async (req, res) => {
 
 
 //update cart
-// export const updateCartItemController = async (req, res) => {
-//     try {
-//         const { id: userId } = req.user;
-//         const { productId } = req.params;
-//         const { packSizeId, quantity } = req.body;
+export const updateCartItemController = async (req, res) => {
+    try {
+        const { id: userId } = req.user;
+        const { productId } = req.params;
+        const { packSizeId, quantity } = req.body;
 
-//         // === Validation ===
-//         if (!mongoose.Types.ObjectId.isValid(productId)) {
-//             return sendErrorResponse(res, 400, "Invalid product ID");
-//         }
-//         if (!mongoose.Types.ObjectId.isValid(packSizeId)) {
-//             return sendErrorResponse(res, 400, "Invalid packSize ID");
-//         }
-//         if (!quantity || quantity < 1) {
-//             return sendErrorResponse(res, 400, "Quantity must be at least 1");
-//         }
+        // === Validation ===
+        if (!mongoose.Types.ObjectId.isValid(productId)) {
+            return sendErrorResponse(res, 400, "Invalid product ID");
+        }
+        if (!mongoose.Types.ObjectId.isValid(packSizeId)) {
+            return sendErrorResponse(res, 400, "Invalid packSize ID");
+        }
+        if (!quantity || quantity < 1) {
+            return sendErrorResponse(res, 400, "Quantity must be at least 1");
+        }
 
-//         // === Find cart ===
-//         const cart = await cartModel.findOne({ userId });
-//         if (!cart) return sendErrorResponse(res, 404, "Cart not found");
+        // === Find cart ===
+        const cart = await cartModel.findOne({ userId });
+        if (!cart) return sendErrorResponse(res, 404, "Cart not found");
 
-//         // === Find item ===
-//         const item = cart.items.find(
-//             (i) =>
-//                 i.productId.toString() === productId &&
-//                 i.packSizeId.toString() === packSizeId
-//         );
-//         if (!item) return sendErrorResponse(res, 404, "Item not found in cart");
+        // === Find item ===
+        const item = cart.items.find(
+            (i) =>
+                i.productId.toString() === productId &&
+                i.packSizeId.toString() === packSizeId
+        );
+        if (!item) return sendErrorResponse(res, 404, "Item not found in cart");
 
-//         // === Update only quantity ===
-//         item.quantity = quantity;
+        // === Update only quantity ===
+        item.quantity = quantity;
 
-//         await cart.save();
-//         await cart.populate("items.productId", "productName packSizes");
+        await cart.save();
+        await cart.populate("items.productId", "productName packSizes");
 
-//         // === Calculate total ===
-//         let totalAmount = 0;
-//         cart.items.forEach((item) => {
-//             if (item.productId?.packSizes) {
-//                 const selectedPack = item.productId.packSizes.find(
-//                     (p) => p._id.toString() === item.packSizeId.toString()
-//                 );
-//                 if (selectedPack) {
-//                     totalAmount += selectedPack.price * item.quantity;
-//                 }
-//             }
-//         });
+        // === Calculate total ===
+        let totalAmount = 0;
+        cart.items.forEach((item) => {
+            if (item.productId?.packSizes) {
+                const selectedPack = item.productId.packSizes.find(
+                    (p) => p._id.toString() === item.packSizeId.toString()
+                );
+                if (selectedPack) {
+                    totalAmount += selectedPack.price * item.quantity;
+                }
+            }
+        });
 
-//         return sendSuccessResponse(res, 200, "Cart item quantity updated", {
-//             items: cart.items,
-//             totalAmount,
-//         });
-//     } catch (err) {
-//         console.error("Patch cart item error:", err);
-//         return sendErrorResponse(res, 500, "Error updating cart item quantity", err.message);
-//     }
-// };
+        return sendSuccessResponse(res, 200, "Cart item quantity updated", {
+            items: cart.items,
+            totalAmount,
+        });
+    } catch (err) {
+        console.error("Patch cart item error:", err);
+        return sendErrorResponse(res, 500, "Error updating cart item quantity", err.message);
+    }
+};
 
 // delete by id
 export const deleteCartItemController = async (req, res) => {
