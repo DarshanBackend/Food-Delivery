@@ -9,7 +9,7 @@ import { filterProductController, getAllProductsController, getPackSizeByIdContr
 import { addToCartController, deleteCartItemController, getMyCartController, updateCartItemController } from '../controller/cart.controller.js';
 import { createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
 import { makeNewPaymentController } from '../controller/payment.controller.js';
-import { myOrderController, newOrderController, selectUserAddressController, updateMyOrderController } from '../controller/order.controller.js';
+import { cancelMyOrderController, deleteMyOrderController, myOrderController, newOrderController, selectUserAddressController, sellerChangeOrderStatusController, updateMyOrderController } from '../controller/order.controller.js';
 
 const indexRouter = express.Router();
 
@@ -121,9 +121,9 @@ indexRouter.delete("/seller/deleteCoupon/:id", sellerAuth, deleteCoupon)
 indexRouter.put("/users/select-address/:addressId", UserAuth, selectUserAddressController)
 indexRouter.post("/new/order", UserAuth, newOrderController)
 indexRouter.patch("/update/myorder/:orderId", UserAuth, updateMyOrderController);
-
-
-
+indexRouter.delete("/delete/myorder/:itemId", UserAuth, deleteMyOrderController)
+indexRouter.post("/user/order/cancel/:itemId", UserAuth, cancelMyOrderController)
+indexRouter.patch("/order/status/:itemId", sellerAuth, sellerChangeOrderStatusController)
 
 
 

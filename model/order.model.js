@@ -14,6 +14,11 @@ const orderSchema = new mongoose.Schema({
                 ref: "product",
                 required: [true, "Product Id is required for Order"]
             },
+            sellerId: {
+                type: mongoose.Types.ObjectId,
+                ref: "seller",
+                required: [true, "Seller Id is required for Order"],
+            },
             packSizeId: {
                 type: mongoose.Types.ObjectId,
                 required: [true, "PackSize Id is required for Order"]
@@ -29,7 +34,7 @@ const orderSchema = new mongoose.Schema({
                 enum: ["pending", "packing", "out of delivery", "delivered", "cancelled"],
                 default: "pending"
             },
-            reasonForCancell: { type: String, default: null },
+            reasonForCancel: { type: String, default: null },
             comment: { type: String, default: null }
         }
     ],
