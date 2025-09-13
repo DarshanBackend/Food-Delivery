@@ -2,33 +2,36 @@ import mongoose from "mongoose";
 import CouponModel from "../model/coupon.model.js";
 import { ThrowError } from "../utils/Error.utils.js";
 import { sendBadRequestResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/Response.utils.js";
-import couponModel from "../model/coupon.model.js";
+import OrderModel from "../model/order.model.js";
+
 
 export const createCoupon = async (req, res) => {
     try {
-        const { name, description, price, isPrivate } = req.body;
+        const { code, discountType, discountValue, minOrderValue, maxDiscount, expiryDate, isActive } = req.body;
+        const sellerId = req.user.id; // seller creating the coupon
 
-        if (!name || !description || !price) {
-            return sendBadRequestResponse(res, "All fields are required.");
+        if (!code || !discountType || !discountValue || !expiryDate) {
+            return sendBadRequestResponse(res, "Required fields missing");
         }
 
-        const existName = await CouponModel.findOne({ name });
-        if (existName) {
-            return sendBadRequestResponse(res, "This coupon already exists.");
-        }
+        const existCoupon = await CouponModel.findOne({ code });
+        if (existCoupon) return sendBadRequestResponse(res, "Coupon code already exists");
+
+        const [day, month, year] = expiryDate.split("/").map(Number);
+        const expiry = new Date(year, month - 1, day, 23, 59, 59, 999);
 
         const newCoupon = await CouponModel.create({
-            name,
-            description,
-            price,
-            isPrivate: isPrivate || false
+            code,
+            discountType,
+            discountValue,
+            minOrderValue: minOrderValue || 0,
+            maxDiscount: maxDiscount || null,
+            expiryDate: expiry,
+            isActive: isActive ?? true,
+            sellerId // assign seller
         });
 
-        return res.status(201).json({
-            success: true,
-            message: "Coupon created successfully",
-            result: newCoupon
-        });
+        return sendSuccessResponse(res, "Coupon created successfully", newCoupon);
     } catch (error) {
         return ThrowError(res, 500, error.message);
     }
@@ -36,127 +39,156 @@ export const createCoupon = async (req, res) => {
 
 export const getAllCoupon = async (req, res) => {
     try {
-        const coupon = await CouponModel.find()
+        const coupons = await CouponModel.find();
 
-        if (!coupon || !coupon.length === 0) {
-            return sendNotFoundResponse(res, "No any Coupon found!!!")
+        if (!coupons || coupons.length === 0) {
+            return sendNotFoundResponse(res, "No coupons found!");
         }
 
-        return sendSuccessResponse(res, "Coupon fetched Successfully...", coupon)
+        return sendSuccessResponse(res, "Coupons fetched successfully", coupons);
     } catch (error) {
-        return ThrowError(res, 500, error.message)
+        return ThrowError(res, 500, error.message);
     }
-}
+};
 
 export const getCouponById = async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Validate ID
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            return sendBadRequestResponse(res, "Invalid CouponId")
+            return sendBadRequestResponse(res, "Invalid Coupon ID");
         }
 
-        const existCoupom = await CouponModel.findById(id)
-        if (!existCoupom) {
-            return sendNotFoundResponse(res, "Coupon not Found!!!")
+        // Find coupon
+        const coupon = await CouponModel.findById(id);
+        if (!coupon) {
+            return sendNotFoundResponse(res, "Coupon not found!");
         }
 
-        return sendSuccessResponse(res, "Coupon fetched Successfully...", existCoupom)
+        return sendSuccessResponse(res, "Coupon fetched successfully", coupon);
     } catch (error) {
-        return ThrowError(res, 500, error.message)
+        return ThrowError(res, 500, error.message);
     }
-}
+};
+
 
 export const updateCoupon = async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Validate ID
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            return sendBadRequestResponse(res, "Invalid CouponId")
+            return sendBadRequestResponse(res, "Invalid Coupon ID");
         }
 
-        const checkCoupon = await CouponModel.findById(id)
-        if (!checkCoupon) {
-            return sendNotFoundResponse(res, "Coupon not found!!!")
+        // Check coupon exists
+        const existingCoupon = await CouponModel.findById(id);
+        if (!existingCoupon) {
+            return sendNotFoundResponse(res, "Coupon not found!");
         }
 
-        const updateCoupon = (req.body)
-        const newCoupon = await CouponModel.findByIdAndUpdate(id, updateCoupon, { new: true })
+        // Only allow valid fields to update
+        const allowedUpdates = [
+            "code",
+            "discountType",
+            "discountValue",
+            "minOrderValue",
+            "maxDiscount",
+            "expiryDate",
+            "isActive"
+        ];
 
-        return sendSuccessResponse(res, "Coupon updated Successfully...", newCoupon)
+        const updates = {};
+        Object.keys(req.body).forEach((key) => {
+            if (allowedUpdates.includes(key)) {
+                updates[key] = req.body[key];
+            }
+        });
 
+        // Update coupon
+        const updatedCoupon = await CouponModel.findByIdAndUpdate(id, updates, { new: true });
+
+        return sendSuccessResponse(res, "Coupon updated successfully", updatedCoupon);
     } catch (error) {
-        return ThrowError(res, 500, error.message)
+        return ThrowError(res, 500, error.message);
     }
-}
+};
 
 export const deleteCoupon = async (req, res) => {
     try {
-        const { id } = req.params
+        const { id } = req.params;
 
+        // Validate ID
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            return sendBadRequestResponse(res, "Invalid CouponId")
+            return sendBadRequestResponse(res, "Invalid Coupon ID");
         }
 
-        const checkCoupon = await CouponModel.findById(id)
-        if (!checkCoupon) {
-            return sendNotFoundResponse(res, "Coupon Not found!!!")
+        // Check if coupon exists
+        const coupon = await CouponModel.findById(id);
+        if (!coupon) {
+            return sendNotFoundResponse(res, "Coupon not found!");
         }
 
-        await CouponModel.findByIdAndDelete(id)
+        // Delete coupon
+        await CouponModel.findByIdAndDelete(id);
 
-        return sendSuccessResponse(res, "Coupon deleted Successfully...")
+        return sendSuccessResponse(res, "Coupon deleted successfully", { deletedId: id });
     } catch (error) {
-        return ThrowError(res, 500, error.message)
+        return ThrowError(res, 500, error.message);
     }
-}
+};
 
 export const applyCouponController = async (req, res) => {
     try {
-        const { code, orderAmount } = req.body;
+        const { code, orderId } = req.body;
 
-        if (!code || !orderAmount) {
-            return res.status(400).json({ success: false, message: "Coupon code and order amount are required" });
-        }
+        if (!code || !orderId) return sendBadRequestResponse(res, "Coupon code and orderId are required");
 
-        const coupon = await couponModel.findOne({ code: code.toUpperCase(), isActive: true });
+        const order = await OrderModel.findById(orderId).populate("items.productId");
+        if (!order) return sendNotFoundResponse(res, "Order not found");
 
-        if (!coupon) {
-            return res.status(404).json({ success: false, message: "Invalid or expired coupon" });
-        }
+        const coupon = await CouponModel.findOne({ code: code.toUpperCase(), isActive: true });
+        if (!coupon) return sendNotFoundResponse(res, "Invalid or inactive coupon");
 
-        if (coupon.expiryDate < new Date()) {
-            return res.status(400).json({ success: false, message: "Coupon expired" });
-        }
+        if (coupon.expiryDate < new Date()) return sendBadRequestResponse(res, "Coupon has expired");
 
-        if (orderAmount < coupon.minOrderValue) {
-            return res.status(400).json({ success: false, message: `Minimum order value should be ₹${coupon.minOrderValue}` });
+        // Only calculate discount for items from this seller
+        let eligibleAmount = 0;
+        order.items.forEach(item => {
+            if (item.sellerId.toString() === coupon.sellerId.toString()) {
+                eligibleAmount += (item.productId.price || 0) * item.quantity;
+            }
+        });
+
+        if (eligibleAmount < coupon.minOrderValue) {
+            return sendBadRequestResponse(res, `Minimum order value for this coupon: ₹${coupon.minOrderValue}`);
         }
 
         let discount = 0;
-
         if (coupon.discountType === "percentage") {
-            discount = (orderAmount * coupon.discountValue) / 100;
-            if (coupon.maxDiscount && discount > coupon.maxDiscount) {
-                discount = coupon.maxDiscount;
-            }
+            discount = (eligibleAmount * coupon.discountValue) / 100;
+            if (coupon.maxDiscount && discount > coupon.maxDiscount) discount = coupon.maxDiscount;
         } else if (coupon.discountType === "flat") {
             discount = coupon.discountValue;
         }
 
-        const finalAmount = orderAmount - discount;
+        if (discount > eligibleAmount) discount = eligibleAmount;
 
-        return res.status(200).json({
-            success: true,
-            message: "Coupon applied successfully",
-            data: {
-                orderAmount,
-                discount,
-                finalAmount,
-                coupon: coupon.code,
-            },
+        order.appliedCoupon = coupon.code;
+        order.discount = discount;
+        order.finalAmount = order.totalAmount - discount;
+
+        await order.save();
+
+        return sendSuccessResponse(res, "Coupon applied successfully", {
+            orderId: order._id,
+            couponCode: coupon.code,
+            eligibleAmount,
+            discount,
+            finalAmount: order.finalAmount
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        return ThrowError(res, 500, error.message);
     }
 };

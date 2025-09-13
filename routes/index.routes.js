@@ -10,6 +10,7 @@ import { addToCartController, deleteCartItemController, getMyCartController, upd
 import { applyCouponController, createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
 import { downloadInvoiceController, getSellerPaymentsController, makeNewPaymentController, myPaymentController } from '../controller/payment.controller.js';
 import { cancelMyOrderController, deleteMyOrderController, myOrderController, newOrderController, selectUserAddressController, sellerChangeOrderStatusController, updateMyOrderController, userStatusFilterController } from '../controller/order.controller.js';
+import { createOfferController } from '../controller/offer.controller.js';
 
 const indexRouter = express.Router();
 
@@ -51,6 +52,11 @@ indexRouter.get("/get/product/detail/:productId", getProductDetailController)
 indexRouter.get("/search", searchProductController);
 indexRouter.get("/filter", filterProductController);
 indexRouter.get("/packSize/:packSizeId", getPackSizeByIdController);
+
+//offer.routes.js
+indexRouter.post("/seller/create/offer", sellerAuth, upload.single("offerImage"), createOfferController);
+
+
 
 
 //seller.kyc.router.js

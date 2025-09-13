@@ -9,7 +9,6 @@ export const makeNewPaymentController = async (req, res) => {
         const userId = req?.user?.id;
         const {
             orderId,
-            amount,
             paymentMethod,
             transactionId,
             cardDetails,
@@ -17,15 +16,19 @@ export const makeNewPaymentController = async (req, res) => {
             bankTransferDetails,
         } = req.body;
 
-        if (!userId || !orderId || !amount || !paymentMethod) {
+        // Validate required fields
+        if (!userId || !orderId || !paymentMethod) {
             return res.status(400).json({ success: false, message: "Missing required fields" });
         }
 
-        // Check order exists
-        const orderExists = await orderModel.findById(orderId);
-        if (!orderExists) {
+        // Fetch order
+        const order = await orderModel.findById(orderId);
+        if (!order) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
+
+        // Use order.finalAmount as the payment amount
+        const amount = order.finalAmount;
 
         // Create Payment
         const payment = await paymentModel.create({
@@ -52,6 +55,7 @@ export const makeNewPaymentController = async (req, res) => {
         });
     }
 };
+
 
 export const myPaymentController = async (req, res) => {
     try {

@@ -29,21 +29,27 @@ const orderSchema = new mongoose.Schema(
                     required: [true, "Quantity is required"],
                     min: [1, "Minimum 1 quantity is required"],
                 },
+                status: {
+                    type: String,
+                    enum: ["pending", "packing", "out for delivery", "delivered", "cancelled"],
+                    default: "pending",
+                },
+                reasonForCancel: { type: String, default: null },
+                comment: { type: String, default: null },
             },
         ],
 
-        // Belongs to whole order, not per item
+        // Global delivery address for the order
         deliveryAddress: UserAddressSchema,
-        status: {
-            type: String,
-            enum: ["pending", "packing", "out for delivery", "delivered", "cancelled"],
-            default: "pending",
-        },
-        reasonForCancel: { type: String, default: null },
-        comment: { type: String, default: null },
+
+        totalAmount: { type: Number, required: true, default: 0 },
+        discount: { type: Number, default: 0 },
+        finalAmount: { type: Number, required: true, default: 0 },
+        appliedCoupon: { type: String, default: null },
     },
     { timestamps: true }
 );
 
 const orderModel = mongoose.model("order", orderSchema);
+
 export default orderModel;
