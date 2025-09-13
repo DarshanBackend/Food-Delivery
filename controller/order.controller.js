@@ -345,3 +345,31 @@ export const sellerChangeOrderStatusController = async (req, res) => {
         return sendErrorResponse(res, 500, "Error while updating order status", error?.message || error);
     }
 };
+
+//user status wise filter
+export const userStatusFilterController = async (req, res) => {
+    try {
+        const userId = req?.user?.id;
+        const { status } = req.query;
+        const allowedStatus = ["pending", "packing", "out of delivery", "delivered", "cancelled"];
+
+        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+            return sendBadRequestResponse(res, "Invalid userId");
+        }
+        if (!status || !allowedStatus.includes(status)) {
+            return sendBadRequestResponse(res, `Status query parameter is required and must be one of: ${allowedStatus.join(", ")}`);
+        }
+        const orders = await orderModel.find({ userId, "items.status": status }).populate({ path: "items.sellerId", select: "name email phone" });
+
+        if (!orders || orders.length === 0) {
+            return sendNotFoundResponse(res, `No orders found with status: ${status}`);
+        }
+        return sendSuccessResponse(res, `Orders with status: ${status} fetched successfully`, {
+            total: orders.length,
+            orders
+        });
+    } catch (error) {
+        console.error("Error while filtering orders by status:", error);
+        return sendErrorResponse(res, 500, "Error while filtering orders by status", error?.message || error);
+    }
+};

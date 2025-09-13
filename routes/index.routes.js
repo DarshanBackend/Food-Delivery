@@ -7,9 +7,9 @@ import { upload } from '../middleware/imageUpload.js';
 import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
 import { filterProductController, getAllProductsController, getPackSizeByIdController, getProductByCategoryController, getProductDetailController, newProductController, searchProductController } from '../controller/product.controller.js';
 import { addToCartController, deleteCartItemController, getMyCartController, updateCartItemController } from '../controller/cart.controller.js';
-import { createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
+import { applyCouponController, createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
 import { makeNewPaymentController } from '../controller/payment.controller.js';
-import { cancelMyOrderController, deleteMyOrderController, myOrderController, newOrderController, selectUserAddressController, sellerChangeOrderStatusController, updateMyOrderController } from '../controller/order.controller.js';
+import { cancelMyOrderController, deleteMyOrderController, myOrderController, newOrderController, selectUserAddressController, sellerChangeOrderStatusController, updateMyOrderController, userStatusFilterController } from '../controller/order.controller.js';
 
 const indexRouter = express.Router();
 
@@ -101,11 +101,13 @@ indexRouter.get("/getAllSeller", getAllSeller)
 indexRouter.get("/getSeller", sellerAuth, getSeller)
 
 // Coupon
-indexRouter.post("/seller/createCoupon", sellerAuth, createCoupon)
-indexRouter.get("/getAllCoupon", UserAuth, getAllCoupon)
-indexRouter.get("/getCouponById/:id", UserAuth, getCouponById)
-indexRouter.patch("/seller/updateCoupon/:id", sellerAuth, updateCoupon)
-indexRouter.delete("/seller/deleteCoupon/:id", sellerAuth, deleteCoupon)
+indexRouter.post("/seller/createCoupon", sellerAuth, createCoupon);
+indexRouter.get("/getAllCoupon", UserAuth, getAllCoupon);
+indexRouter.get("/getCouponById/:id", UserAuth, getCouponById);
+indexRouter.patch("/seller/updateCoupon/:id", sellerAuth, updateCoupon);
+indexRouter.delete("/seller/deleteCoupon/:id", sellerAuth, deleteCoupon);
+indexRouter.post("/apply-coupon", applyCouponController);
+
 
 // Payment
 // indexRouter.post("/user/createPayment", UserAuth, isUser, createPayment)
@@ -121,9 +123,11 @@ indexRouter.delete("/seller/deleteCoupon/:id", sellerAuth, deleteCoupon)
 indexRouter.put("/users/select-address/:addressId", UserAuth, selectUserAddressController)
 indexRouter.post("/new/order", UserAuth, newOrderController)
 indexRouter.patch("/update/myorder/:orderId", UserAuth, updateMyOrderController);
-indexRouter.delete("/delete/myorder/:itemId", UserAuth, deleteMyOrderController)
-indexRouter.post("/user/order/cancel/:itemId", UserAuth, cancelMyOrderController)
-indexRouter.patch("/order/status/:itemId", sellerAuth, sellerChangeOrderStatusController)
+indexRouter.delete("/delete/myorder/:itemId", UserAuth, deleteMyOrderController);
+indexRouter.post("/user/order/cancel/:itemId", UserAuth, cancelMyOrderController);
+indexRouter.get("/my/order", UserAuth, myOrderController);
+indexRouter.get("/status/filter", UserAuth, userStatusFilterController); // order status filter
+indexRouter.patch("/order/status/:itemId", sellerAuth, sellerChangeOrderStatusController); // seller side status change
 
 
 
@@ -131,6 +135,5 @@ indexRouter.patch("/order/status/:itemId", sellerAuth, sellerChangeOrderStatusCo
 // make payment
 
 indexRouter.post("/new/payment", UserAuth, makeNewPaymentController);
-indexRouter.get("/my/order", UserAuth, myOrderController)
 
 export default indexRouter;

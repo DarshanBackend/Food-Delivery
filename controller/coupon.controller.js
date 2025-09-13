@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import CouponModel from "../model/coupon.model.js";
 import { ThrowError } from "../utils/Error.utils.js";
 import { sendBadRequestResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/Response.utils.js";
+import couponModel from "../model/coupon.model.js";
 
 export const createCoupon = async (req, res) => {
     try {
@@ -109,3 +110,53 @@ export const deleteCoupon = async (req, res) => {
         return ThrowError(res, 500, error.message)
     }
 }
+
+export const applyCouponController = async (req, res) => {
+    try {
+        const { code, orderAmount } = req.body;
+
+        if (!code || !orderAmount) {
+            return res.status(400).json({ success: false, message: "Coupon code and order amount are required" });
+        }
+
+        const coupon = await couponModel.findOne({ code: code.toUpperCase(), isActive: true });
+
+        if (!coupon) {
+            return res.status(404).json({ success: false, message: "Invalid or expired coupon" });
+        }
+
+        if (coupon.expiryDate < new Date()) {
+            return res.status(400).json({ success: false, message: "Coupon expired" });
+        }
+
+        if (orderAmount < coupon.minOrderValue) {
+            return res.status(400).json({ success: false, message: `Minimum order value should be ₹${coupon.minOrderValue}` });
+        }
+
+        let discount = 0;
+
+        if (coupon.discountType === "percentage") {
+            discount = (orderAmount * coupon.discountValue) / 100;
+            if (coupon.maxDiscount && discount > coupon.maxDiscount) {
+                discount = coupon.maxDiscount;
+            }
+        } else if (coupon.discountType === "flat") {
+            discount = coupon.discountValue;
+        }
+
+        const finalAmount = orderAmount - discount;
+
+        return res.status(200).json({
+            success: true,
+            message: "Coupon applied successfully",
+            data: {
+                orderAmount,
+                discount,
+                finalAmount,
+                coupon: coupon.code,
+            },
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Server error", error: error.message });
+    }
+};
