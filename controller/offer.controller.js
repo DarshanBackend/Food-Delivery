@@ -7,11 +7,6 @@ export const createOfferController = async (req, res) => {
             offerTitle,
             offerDesc,
             category,
-            isSpecialOffer = false, // optional, default false
-            discountPercent = 0,
-            headline = "",
-            subText = "",
-            countdown = null, // optional countdown object: { days, hours, minutes, seconds }
         } = req.body;
 
         if (!offerTitle || !offerDesc || !category) {
