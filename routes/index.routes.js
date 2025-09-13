@@ -8,7 +8,7 @@ import { getProfileController, getSellerProfileController, getUserAddressControl
 import { filterProductController, getAllProductsController, getPackSizeByIdController, getProductByCategoryController, getProductDetailController, newProductController, searchProductController } from '../controller/product.controller.js';
 import { addToCartController, deleteCartItemController, getMyCartController, updateCartItemController } from '../controller/cart.controller.js';
 import { applyCouponController, createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
-import { makeNewPaymentController } from '../controller/payment.controller.js';
+import { downloadInvoiceController, getSellerPaymentsController, makeNewPaymentController, myPaymentController } from '../controller/payment.controller.js';
 import { cancelMyOrderController, deleteMyOrderController, myOrderController, newOrderController, selectUserAddressController, sellerChangeOrderStatusController, updateMyOrderController, userStatusFilterController } from '../controller/order.controller.js';
 
 const indexRouter = express.Router();
@@ -109,16 +109,6 @@ indexRouter.delete("/seller/deleteCoupon/:id", sellerAuth, deleteCoupon);
 indexRouter.post("/apply-coupon", applyCouponController);
 
 
-// Payment
-// indexRouter.post("/user/createPayment", UserAuth, isUser, createPayment)
-// indexRouter.get("/getAllPayment", UserAuth, getAllPayment)
-// indexRouter.get("/getPaymentById/:id", UserAuth, getPaymentById)
-// indexRouter.get("/getUserPayment", UserAuth, getUserPayment)
-// indexRouter.patch("/user/updatePayment/:id", UserAuth, updatePayment)
-// indexRouter.delete("/user/deletePayment/:id", UserAuth, deletePayment)
-
-
-
 //order.routes.js
 indexRouter.put("/users/select-address/:addressId", UserAuth, selectUserAddressController)
 indexRouter.post("/new/order", UserAuth, newOrderController)
@@ -132,8 +122,9 @@ indexRouter.patch("/order/status/:itemId", sellerAuth, sellerChangeOrderStatusCo
 
 
 // payment.route.js
-// make payment
-
 indexRouter.post("/new/payment", UserAuth, makeNewPaymentController);
+indexRouter.get("/my/payments", UserAuth, myPaymentController);
+indexRouter.get("/all/payments", sellerAuth, getSellerPaymentsController);
+indexRouter.get("/download/invoice/:paymentId", UserAuth, downloadInvoiceController);
 
 export default indexRouter;

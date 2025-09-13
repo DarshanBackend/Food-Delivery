@@ -53,161 +53,202 @@ export const selectUserAddressController = async (req, res) => {
 };
 
 
+// ✅ Place New Order
 export const newOrderController = async (req, res) => {
     try {
         const userId = req?.user?.id;
         const { items } = req.body;
 
-
         if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
             return sendBadRequestResponse(res, "Invalid or missing userId");
         }
 
-
         if (!Array.isArray(items) || items.length === 0) {
-            return sendBadRequestResponse(res, "Items must be an array with at least 1 product");
+            return sendBadRequestResponse(
+                res,
+                "Items must be an array with at least 1 product"
+            );
         }
 
+        // validate items
         for (const [index, item] of items.entries()) {
             if (!item.productId || !mongoose.Types.ObjectId.isValid(item.productId)) {
-                return sendBadRequestResponse(res, `Invalid or missing productId at index ${index}`);
+                return sendBadRequestResponse(
+                    res,
+                    `Invalid or missing productId at index ${index}`
+                );
             }
             if (!item.packSizeId || !mongoose.Types.ObjectId.isValid(item.packSizeId)) {
-                return sendBadRequestResponse(res, `Invalid or missing packSizeId at index ${index}`);
+                return sendBadRequestResponse(
+                    res,
+                    `Invalid or missing packSizeId at index ${index}`
+                );
             }
             if (!item.quantity || item.quantity < 1) {
-                return sendBadRequestResponse(res, `Quantity must be >= 1 at index ${index}`);
+                return sendBadRequestResponse(
+                    res,
+                    `Quantity must be >= 1 at index ${index}`
+                );
             }
         }
 
-
-        const user = await UserModel.findById(userId).select("address selectedAddress");
+        // get user & selected address
+        const user = await UserModel.findById(userId).select(
+            "address selectedAddress"
+        );
         if (!user) return sendNotFoundResponse(res, "User not found");
         if (!user.selectedAddress) {
-            return sendNotFoundResponse(res, "No selected address found. Please select an address first.");
+            return sendNotFoundResponse(
+                res,
+                "No selected address found. Please select an address first."
+            );
         }
-
         const selectedAddress = user.address.id(user.selectedAddress);
         if (!selectedAddress) {
-            return sendNotFoundResponse(res, "Selected address not found in user addresses");
+            return sendNotFoundResponse(
+                res,
+                "Selected address not found in user addresses"
+            );
         }
 
-
+        // attach sellerId to each item
         const itemsWithSeller = await Promise.all(
             items.map(async (item) => {
-                const product = await productModel.findById(item.productId).select("sellerId");
+                const product = await productModel
+                    .findById(item.productId)
+                    .select("sellerId");
                 if (!product) {
                     throw new Error(`Product not found for productId: ${item.productId}`);
                 }
                 return {
                     ...item,
-                    deliveryAddress: selectedAddress,
-                    sellerId: product.sellerId
+                    sellerId: product.sellerId,
                 };
             })
         );
 
+        const newOrder = new orderModel({
+            userId,
+            items: itemsWithSeller,
+            deliveryAddress: selectedAddress,
+        });
 
-        let order = await orderModel.findOne({ userId });
+        await newOrder.save();
 
-        if (order) {
-
-            order.items.push(...itemsWithSeller);
-            await order.save();
-            return sendSuccessResponse(res, "Order updated successfully (items appended)", order);
-        } else {
-
-            const newOrder = new orderModel({
-                userId,
-                items: itemsWithSeller
-            });
-
-            await newOrder.save();
-            return sendSuccessResponse(res, "Order placed successfully", newOrder);
-        }
+        return sendSuccessResponse(res, "Order placed successfully", newOrder);
     } catch (error) {
         console.error("Error While Ordering:", error);
-        return sendErrorResponse(res, 500, "Error While Ordering", error?.message || error);
+        return sendErrorResponse(
+            res,
+            500,
+            "Error While Ordering",
+            error?.message || error
+        );
     }
 };
+
 
 export const myOrderController = async (req, res) => {
     try {
         const userId = req?.user?.id;
-
-        if (!userId && !mongoose.Types.ObjectId.isValid(userId)) {
-            return sendBadRequestResponse(res, "User id not found by Token");
+        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+            return sendBadRequestResponse(res, "Invalid user id");
         }
 
-        //check
+        const myOrders = await orderModel
+            .find({ userId })
+            .populate({
+                path: "items.sellerId",
+                select: "name email phone"
+            })
+            .populate({
+                path: "items.productId",
+                select: "productName images price", // ✅ make sure price is included
+                populate: {
+                    path: "sellerId",
+                    select: "businessName storeName email mobileNo pickUpAddr"
+                }
+            })
+            .populate({
+                path: "userId",
+                select: "name email"
+            });
 
-        const myOrder = await orderModel.find({ userId }).populate({ path: "items.sellerId", select: "name email phone" });
+        if (!myOrders || myOrders.length === 0) {
+            return sendNotFoundResponse(res, "No orders found");
+        }
 
-        if (!myOrder) return sendNotFoundResponse(res, "My Order's Not Found! OOPS!");
+        // ✅ Calculate totals
+        const ordersWithTotals = myOrders.map(order => {
+            let totalAmount = 0;
 
-        return sendSuccessResponse(res, "My order fetched Successfully", {
-            total: myOrder.length,
-            myOrder
+            order.items.forEach(item => {
+                const price = item.productId?.price || 0;
+                totalAmount += price * item.quantity;
+            });
+
+            return {
+                ...order.toObject(),
+                totalAmount
+            };
+        });
+
+        return sendSuccessResponse(res, "My orders fetched successfully", {
+            total: ordersWithTotals.length,
+            myOrders: ordersWithTotals,
         });
     } catch (error) {
-        console.log("Error during Fetching My Controller");
-        return sendErrorResponse(res, 500, "Error while Fetching My orders", error)
+        console.error("Error fetching orders:", error);
+        return sendErrorResponse(res, 500, "Error fetching orders", error);
     }
-}
+};
+
 
 export const updateMyOrderController = async (req, res) => {
     try {
         const userId = req?.user?.id;
-        const { items } = req.body;
         const { orderId } = req.params;
-
+        const { items, comment } = req.body;
 
         if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
             return sendBadRequestResponse(res, "Invalid or missing userId");
         }
-
         if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
             return sendBadRequestResponse(res, "Invalid or missing orderId");
         }
 
-        if (!Array.isArray(items) || items.length === 0) {
-            return sendBadRequestResponse(res, "Items must be an array with at least 1 product");
-        }
-
-        for (const [index, item] of items.entries()) {
-            if (!item._id || !mongoose.Types.ObjectId.isValid(item._id)) {
-                return sendBadRequestResponse(res, `Invalid or missing item._id at index ${index}`);
-            }
-        }
-
-
-        let order = await orderModel.findOne({ _id: orderId, userId });
+        const order = await orderModel.findOne({ _id: orderId, userId });
         if (!order) {
-            return sendNotFoundResponse(res, "Order not found for this user");
+            return sendNotFoundResponse(res, "Order not found");
         }
 
-
-        items.forEach(updateItem => {
-            const orderItem = order.items.id(updateItem._id);
-            if (orderItem) {
-                // Update only provided fields
-                if (updateItem.quantity !== undefined) orderItem.quantity = updateItem.quantity;
-                if (updateItem.status !== undefined) orderItem.status = updateItem.status;
-                if (updateItem.comment !== undefined) orderItem.comment = updateItem.comment;
-                if (updateItem.reasonForCancel !== undefined) {
-                    orderItem.reasonForCancel = updateItem.reasonForCancel;
+        if (Array.isArray(items) && items.length > 0) {
+            items.forEach((updateItem) => {
+                const orderItem = order.items.id(updateItem._id);
+                if (orderItem) {
+                    if (updateItem.quantity !== undefined)
+                        orderItem.quantity = updateItem.quantity;
                 }
-            }
-        });
+            });
+        }
+
+        if (comment !== undefined) {
+            order.comment = comment;
+        }
 
         await order.save();
-
-        return sendSuccessResponse(res, "Order items updated successfully", order);
+        return sendSuccessResponse(res, "Order updated successfully", order);
     } catch (error) {
-        console.error("Error While Updating Order Items:", error);
-        return sendErrorResponse(res, 500, "Error While Updating Order Items", error?.message || error);
+        console.error("Error updating order:", error);
+        return sendErrorResponse(
+            res,
+            500,
+            "Error updating order",
+            error?.message || error
+        );
     }
 };
+
 
 
 export const deleteMyOrderController = async (req, res) => {
@@ -255,121 +296,143 @@ export const deleteMyOrderController = async (req, res) => {
 export const cancelMyOrderController = async (req, res) => {
     try {
         const userId = req?.user?.id;
-        const { itemId } = req.params;
+        const { orderId } = req.params;
         const { reasonForCancel, comment } = req.body;
 
         if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-            return sendBadRequestResponse(res, "Invalid or missing userId");
+            return sendBadRequestResponse(res, "Invalid userId");
         }
-
-
-        if (!itemId || !mongoose.Types.ObjectId.isValid(itemId)) {
-            return sendBadRequestResponse(res, "Invalid or missing itemId");
+        if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+            return sendBadRequestResponse(res, "Invalid orderId");
         }
-
-
         if (!reasonForCancel || reasonForCancel.trim() === "") {
             return sendBadRequestResponse(res, "Reason for cancellation is required");
         }
 
+        const order = await orderModel.findOne({ _id: orderId, userId });
+        if (!order) return sendNotFoundResponse(res, "Order not found");
 
-        const order = await orderModel.findOne({ userId, "items._id": itemId });
-        if (!order) {
-            return sendNotFoundResponse(res, "Order containing this item not found");
+        if (order.status === "cancelled") {
+            return sendBadRequestResponse(res, "Order is already cancelled");
         }
 
-        const item = order.items.id(itemId);
-        if (!item) {
-            return sendNotFoundResponse(res, "Item not found in order");
-        }
-
-
-        if (item.status === "cancelled") {
-            return sendBadRequestResponse(res, "Item is already cancelled");
-        }
-
-
-        item.status = "cancelled";
-        item.reasonForCancel = reasonForCancel;
-        item.comment = comment || null;
+        order.status = "cancelled";
+        order.reasonForCancel = reasonForCancel;
+        order.comment = comment || null;
 
         await order.save();
-
-        return sendSuccessResponse(res, "Order item cancelled successfully", order);
+        return sendSuccessResponse(res, "Order cancelled successfully", order);
     } catch (error) {
-        console.error("Error While Cancelling Order Item:", error);
-        return sendErrorResponse(res, 500, "Error While Cancelling Order Item", error?.message || error);
+        console.error("Error cancelling order:", error);
+        return sendErrorResponse(res, 500, "Error cancelling order", error);
     }
 };
+
 
 export const sellerChangeOrderStatusController = async (req, res) => {
     try {
         const sellerId = req?.user?.id;
-        const { itemId } = req.params;
+        const { orderId } = req.params;
         const { status } = req.body;
 
-        const allowedStatus = ["pending", "packing", "out of delivery", "delivered", "cancelled"];
-
+        const allowedStatus = [
+            "pending",
+            "packing",
+            "out for delivery",
+            "delivered",
+            "cancelled",
+        ];
 
         if (!sellerId || !mongoose.Types.ObjectId.isValid(sellerId)) {
             return sendBadRequestResponse(res, "Invalid sellerId");
         }
-        if (!itemId || !mongoose.Types.ObjectId.isValid(itemId)) {
-            return sendBadRequestResponse(res, "Invalid or missing itemId");
+        if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+            return sendBadRequestResponse(res, "Invalid orderId");
         }
-
-
         if (!status || !allowedStatus.includes(status)) {
-            return sendBadRequestResponse(res, `Status must be one of: ${allowedStatus.join(", ")}`);
+            return sendBadRequestResponse(
+                res,
+                `Status must be one of: ${allowedStatus.join(", ")}`
+            );
         }
 
-
-        const order = await orderModel.findOne({ "items._id": itemId, "items.sellerId": sellerId });
+        const order = await orderModel.findOne({
+            _id: orderId,
+            "items.sellerId": sellerId,
+        });
         if (!order) {
-            return sendNotFoundResponse(res, "Order item not found for this seller");
+            return sendNotFoundResponse(res, "Order not found for this seller");
         }
 
-        const item = order.items.id(itemId);
-
-        if (!item) {
-            return sendNotFoundResponse(res, "Item not found in order");
-        }
-
-        item.status = status;
-
+        order.status = status;
         await order.save();
 
-        return sendSuccessResponse(res, "Order item status updated successfully", order);
+        return sendSuccessResponse(
+            res,
+            "Order status updated successfully",
+            order
+        );
     } catch (error) {
-        console.error("Error while updating order status:", error);
-        return sendErrorResponse(res, 500, "Error while updating order status", error?.message || error);
+        console.error("Error updating order status:", error);
+        return sendErrorResponse(
+            res,
+            500,
+            "Error updating order status",
+            error?.message || error
+        );
     }
 };
+
 
 //user status wise filter
 export const userStatusFilterController = async (req, res) => {
     try {
         const userId = req?.user?.id;
         const { status } = req.query;
-        const allowedStatus = ["pending", "packing", "out of delivery", "delivered", "cancelled"];
+        const allowedStatus = [
+            "pending",
+            "packing",
+            "out for delivery",
+            "delivered",
+            "cancelled",
+        ];
 
         if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
             return sendBadRequestResponse(res, "Invalid userId");
         }
         if (!status || !allowedStatus.includes(status)) {
-            return sendBadRequestResponse(res, `Status query parameter is required and must be one of: ${allowedStatus.join(", ")}`);
+            return sendBadRequestResponse(
+                res,
+                `Status query parameter is required and must be one of: ${allowedStatus.join(
+                    ", "
+                )}`
+            );
         }
-        const orders = await orderModel.find({ userId, "items.status": status }).populate({ path: "items.sellerId", select: "name email phone" });
+
+        const orders = await orderModel
+            .find({ userId, status })
+            .populate({ path: "items.sellerId", select: "name email phone" });
 
         if (!orders || orders.length === 0) {
             return sendNotFoundResponse(res, `No orders found with status: ${status}`);
         }
-        return sendSuccessResponse(res, `Orders with status: ${status} fetched successfully`, {
-            total: orders.length,
-            orders
-        });
+
+        return sendSuccessResponse(
+            res,
+            `Orders with status: ${status} fetched successfully`,
+            {
+                total: orders.length,
+                orders,
+            }
+        );
     } catch (error) {
-        console.error("Error while filtering orders by status:", error);
-        return sendErrorResponse(res, 500, "Error while filtering orders by status", error?.message || error);
+        console.error("Error filtering orders by status:", error);
+        return sendErrorResponse(
+            res,
+            500,
+            "Error filtering orders by status",
+            error?.message || error
+        );
     }
 };
+
