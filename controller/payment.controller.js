@@ -177,62 +177,151 @@ export const downloadInvoiceController = async (req, res) => {
             });
         }
 
-        // Create a PDF document
-        const doc = new PDFDocument({ margin: 50 });
+        // Create PDF
+        const doc = new PDFDocument({ margin: 50, size: "A4" });
 
-        // Set response headers
         res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `attachment; filename=invoice_${paymentId}.pdf`);
-
-        // Pipe PDF to response
+        res.setHeader("Content-Disposition", `attachment; filename=FastCart_Invoice_${paymentId}.pdf`);
         doc.pipe(res);
 
-        // Invoice Header
-        doc.fontSize(20).text("Invoice", { align: "center" });
+        // ===== Header =====
+        doc
+            .fillColor("#1E90FF") // FastCart blue
+            .fontSize(26)
+            .text("FastCart", { align: "center", bold: true });
+        doc.moveDown(0.5);
+        doc
+            .fontSize(14)
+            .fillColor("black")
+            .text("Invoice", { align: "center" });
         doc.moveDown();
 
-        // Payment Info
-        doc.fontSize(12).text(`Invoice ID: ${payment._id}`);
-        doc.text(`Payment Method: ${payment.paymentMethod}`);
-        doc.text(`Payment Status: ${payment.paymentStatus}`);
-        doc.text(`Payment Date: ${payment.paymentDate.toDateString()}`);
+        // ===== Payment Info =====
+        doc
+            .fillColor("#333333")
+            .fontSize(12)
+            .text(`Invoice ID: ${payment._id}`)
+            .text(`Payment Method: ${payment.paymentMethod}`)
+            .text(`Payment Status: ${payment.paymentStatus}`)
+            .text(`Payment Date: ${payment.paymentDate.toDateString()}`);
         doc.moveDown();
 
-        // User Info
-        doc.text(`Customer Name: ${payment.userId.name}`);
-        doc.text(`Email: ${payment.userId.email}`);
-        doc.text(`Mobile: ${payment.userId.mobileNo}`);
+        // ===== Customer Info =====
+        doc
+            .fillColor("#1E90FF")
+            .fontSize(14)
+            .text("Customer Information", { underline: true });
+        doc.moveDown(0.2);
+        doc
+            .fillColor("#333333")
+            .fontSize(12)
+            .text(`Name: ${payment.userId.name}`)
+            .text(`Email: ${payment.userId.email}`)
+            .text(`Mobile: ${payment.userId.mobileNo}`);
         doc.moveDown();
 
-        // Delivery Address
+        // ===== Delivery Address =====
         const addr = payment.orderId.deliveryAddress;
         if (addr) {
-            doc.text("Delivery Address:");
-            doc.text(`${addr.firstName} ${addr.lastName}`);
-            doc.text(`${addr.houseNo}, ${addr.landmark}`);
-            doc.text(`${addr.city} - ${addr.pincode}, ${addr.state}, ${addr.country}`);
-            doc.text(`Phone: ${addr.phone}`);
+            doc
+                .fillColor("#1E90FF")
+                .fontSize(14)
+                .text("Delivery Address", { underline: true });
+            doc.moveDown(0.2);
+            doc
+                .fillColor("#333333")
+                .fontSize(12)
+                .text(`${addr.firstName} ${addr.lastName}`)
+                .text(`${addr.houseNo}, ${addr.landmark}`)
+                .text(`${addr.city} - ${addr.pincode}, ${addr.state}, ${addr.country}`)
+                .text(`Phone: ${addr.phone}`);
             doc.moveDown();
         }
 
-        // Order Items
-        doc.text("Order Items:");
+        // ===== Order Items =====
+        doc
+            .fillColor("#1E90FF")
+            .fontSize(14)
+            .text("Order Items", { underline: true });
+        doc.moveDown(0.3);
+
         payment.orderId.items.forEach((item, index) => {
             const product = item.productId;
             const seller = item.sellerId;
             const pack = item.packSizeId;
-            doc.text(`${index + 1}. ${product.productName} - ₹${product.price} x ${item.quantity}`);
-            doc.text(`   Seller: ${seller.storeName} (${seller.businessName})`);
-            doc.text(`   Pack: ${pack?.sizeName || "N/A"}`);
-            doc.moveDown(0.5);
+
+            doc
+                .fillColor("#333333")
+                .fontSize(12)
+                .text(`${index + 1}. ${product.productName}`, { continued: true })
+                .fillColor("#FF4500")
+                .text(` ₹${product.price} x ${item.quantity}`);
+            doc
+                .fillColor("#555555")
+                .fontSize(11)
+                .text(`   Seller: ${seller.storeName} (${seller.businessName})`)
+                .text(`   Pack: ${pack?.sizeName || "N/A"}`);
+            doc.moveDown(0.3);
         });
 
-        // Total Amount
-        doc.moveDown();
-        doc.fontSize(14).text(`Total Amount: ₹${payment.amount}`, { align: "right" });
+        // ===== Total Amount =====
+        doc
+            .moveDown()
+            .fontSize(14)
+            .fillColor("#228B22") // green for total
+            .text(`Total Amount: ₹${payment.amount}`, { align: "right", bold: true });
 
-        // Finalize PDF
+        // ===== Footer =====
+        doc
+            .moveDown(2)
+            .fontSize(10)
+            .fillColor("#888888")
+            .text("Thank you for shopping with FastCart!", { align: "center" });
+
         doc.end();
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: error.message
+        });
+    }
+};
+
+export const paymentStatusChangeController = async (req, res) => {
+    try {
+        const { paymentId } = req.params;
+        const { paymentStatus } = req.body;
+
+        // Validate paymentId
+        if (!paymentId || !mongoose.Types.ObjectId.isValid(paymentId)) {
+            return res.status(400).json({ success: false, message: "Valid payment ID is required" });
+        }
+
+        // Validate paymentStatus
+        const allowedStatuses = ["pending", "completed", "failed", "refunded"];
+        if (!paymentStatus || !allowedStatuses.includes(paymentStatus)) {
+            return res.status(400).json({
+                success: false,
+                message: `Payment status must be one of: ${allowedStatuses.join(", ")}`
+            });
+        }
+
+        // Find and update payment
+        const payment = await paymentModel.findById(paymentId);
+        if (!payment) {
+            return res.status(404).json({ success: false, message: "Payment not found" });
+        }
+
+        payment.paymentStatus = paymentStatus;
+        await payment.save();
+
+        return res.status(200).json({
+            success: true,
+            message: `Payment status updated to ${paymentStatus}`,
+            payment
+        });
 
     } catch (error) {
         return res.status(500).json({
