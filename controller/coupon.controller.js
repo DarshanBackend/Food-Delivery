@@ -143,7 +143,8 @@ export const applyCouponController = async (req, res) => {
     try {
         const { code, orderId } = req.body;
 
-        if (!code || !orderId) return sendBadRequestResponse(res, "Coupon code and orderId are required");
+        if (!code || !orderId)
+            return sendBadRequestResponse(res, "Coupon code and orderId are required");
 
         const order = await OrderModel.findById(orderId).populate("items.productId");
         if (!order) return sendNotFoundResponse(res, "Order not found");
@@ -151,15 +152,20 @@ export const applyCouponController = async (req, res) => {
         const coupon = await CouponModel.findOne({ code: code.toUpperCase(), isActive: true });
         if (!coupon) return sendNotFoundResponse(res, "Invalid or inactive coupon");
 
-        if (coupon.expiryDate < new Date()) return sendBadRequestResponse(res, "Coupon has expired");
+        if (coupon.expiryDate < new Date())
+            return sendBadRequestResponse(res, "Coupon has expired");
 
-        // Only calculate discount for items from this seller
+        // ✅ Calculate only for items belonging to this seller
         let eligibleAmount = 0;
         order.items.forEach(item => {
             if (item.sellerId.toString() === coupon.sellerId.toString()) {
                 eligibleAmount += (item.productId.price || 0) * item.quantity;
             }
         });
+
+        if (eligibleAmount === 0) {
+            return sendBadRequestResponse(res, "Coupon not applicable: no items from this seller in order");
+        }
 
         if (eligibleAmount < coupon.minOrderValue) {
             return sendBadRequestResponse(res, `Minimum order value for this coupon: ₹${coupon.minOrderValue}`);
@@ -168,13 +174,16 @@ export const applyCouponController = async (req, res) => {
         let discount = 0;
         if (coupon.discountType === "percentage") {
             discount = (eligibleAmount * coupon.discountValue) / 100;
-            if (coupon.maxDiscount && discount > coupon.maxDiscount) discount = coupon.maxDiscount;
+            if (coupon.maxDiscount && discount > coupon.maxDiscount) {
+                discount = coupon.maxDiscount;
+            }
         } else if (coupon.discountType === "flat") {
             discount = coupon.discountValue;
         }
 
         if (discount > eligibleAmount) discount = eligibleAmount;
 
+        // ✅ Final amount = totalAmount - discount (only applied to eligible seller part)
         order.appliedCoupon = coupon.code;
         order.discount = discount;
         order.finalAmount = order.totalAmount - discount;
@@ -183,6 +192,7 @@ export const applyCouponController = async (req, res) => {
 
         return sendSuccessResponse(res, "Coupon applied successfully", {
             orderId: order._id,
+            sellerId: coupon.sellerId,
             couponCode: coupon.code,
             eligibleAmount,
             discount,

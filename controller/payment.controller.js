@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { sendErrorResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/Response.utils.js";
 import orderModel from "../model/order.model.js";
 import paymentModel from "../model/payment.model.js";
+import cartModel from "../model/cart.model.js";
 import PDFDocument from "pdfkit";
 
 export const makeNewPaymentController = async (req, res) => {
@@ -30,7 +31,7 @@ export const makeNewPaymentController = async (req, res) => {
         // Use order.finalAmount as the payment amount
         const amount = order.finalAmount;
 
-        // Create Payment
+        // Create Payment record
         const payment = await paymentModel.create({
             userId,
             orderId,
@@ -42,12 +43,30 @@ export const makeNewPaymentController = async (req, res) => {
             bankTransferDetails,
         });
 
+        // === Remove ordered items from user's cart ===
+        if (order.items && order.items.length > 0) {
+            await cartModel.updateOne(
+                { userId },
+                {
+                    $pull: {
+                        items: {
+                            $or: order.items.map((i) => ({
+                                productId: i.productId,
+                                packSizeId: i.packSizeId,
+                            })),
+                        },
+                    },
+                }
+            );
+        }
+
         return res.status(201).json({
             success: true,
-            message: "Payment record created",
+            message: "Payment record created & ordered items removed from cart",
             data: payment,
         });
     } catch (error) {
+        console.error("Payment Error:", error);
         return res.status(500).json({
             success: false,
             message: "Server error",
@@ -187,6 +206,16 @@ export const downloadInvoiceController = async (req, res) => {
         // Pipe PDF to response
         doc.pipe(res);
 
+        doc.rect(50, 40, doc.page.width - 100, 40)
+            .fill("#2E86C1");
+
+        doc.fillColor("white")
+            .fontSize(20)
+            .text("Invoice", 50, 50, { align: "center" });
+
+        // Reset color for next text
+        doc.fillColor("black");
+
         // Invoice Header
         doc.fontSize(20).text("Invoice", { align: "center" });
         doc.moveDown();
@@ -223,7 +252,7 @@ export const downloadInvoiceController = async (req, res) => {
             const pack = item.packSizeId;
             doc.text(`${index + 1}. ${product.productName} - ₹${product.price} x ${item.quantity}`);
             doc.text(`   Seller: ${seller.storeName} (${seller.businessName})`);
-            doc.text(`   Pack: ${pack?.sizeName || "N/A"}`);
+            doc.text(`   Pack: ${pack?.unit || "N/A"}`);
             doc.moveDown(0.5);
         });
 

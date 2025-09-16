@@ -3,6 +3,7 @@ import { sendBadRequestResponse, sendErrorResponse, sendNotFoundResponse, sendSu
 import UserModel from "../model/user.model.js";
 import orderModel from "../model/order.model.js";
 import productModel from "../model/product.model.js";
+import cartModel from "../model/cart.model.js";
 
 
 //select address for delivery
@@ -53,7 +54,6 @@ export const selectUserAddressController = async (req, res) => {
 };
 
 
-// ✅ Place New Order
 export const newOrderController = async (req, res) => {
     try {
         const userId = req?.user?.id;
@@ -123,6 +123,7 @@ export const newOrderController = async (req, res) => {
             order.finalAmount = order.totalAmount - (order.discount || 0);
             if (appliedCoupon) order.appliedCoupon = appliedCoupon;
             await order.save();
+
             return sendSuccessResponse(res, "Order updated successfully (items appended)", order);
         } else {
             // Create new order
@@ -130,12 +131,14 @@ export const newOrderController = async (req, res) => {
                 userId,
                 items: itemsWithSeller,
                 deliveryAddress: selectedAddress,
+                platformFee: platformFee,
                 totalAmount: totalAmount + platformFee,
                 finalAmount: totalAmount + platformFee,
                 appliedCoupon: appliedCoupon || null
             });
 
             await newOrder.save();
+
             return sendSuccessResponse(res, "Order placed successfully", newOrder);
         }
     } catch (error) {
@@ -143,7 +146,6 @@ export const newOrderController = async (req, res) => {
         return sendErrorResponse(res, 500, "Error While Ordering", error?.message || error);
     }
 };
-
 
 export const myOrderController = async (req, res) => {
     try {
@@ -200,7 +202,6 @@ export const myOrderController = async (req, res) => {
         return sendErrorResponse(res, 500, "Error fetching orders", error.message || error);
     }
 };
-
 
 export const updateMyOrderController = async (req, res) => {
     try {
@@ -292,8 +293,6 @@ export const updateMyOrderController = async (req, res) => {
     }
 };
 
-
-
 export const deleteMyOrderController = async (req, res) => {
     try {
         const userId = req?.user?.id;
@@ -363,7 +362,6 @@ export const deleteMyOrderController = async (req, res) => {
         return sendErrorResponse(res, 500, "Error While Deleting Order Item", error?.message || error);
     }
 };
-
 
 //cancel 
 export const cancelMyOrderController = async (req, res) => {
@@ -474,7 +472,6 @@ export const cancelMyOrderController = async (req, res) => {
     }
 };
 
-
 export const sellerChangeOrderStatusController = async (req, res) => {
     try {
         const sellerId = req?.user?.id;
@@ -584,7 +581,6 @@ export const sellerChangeOrderStatusController = async (req, res) => {
         return sendErrorResponse(res, 500, "Error updating order status", error?.message || error);
     }
 };
-
 
 //user status wise filter
 export const userStatusFilterController = async (req, res) => {

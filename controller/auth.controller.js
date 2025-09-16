@@ -39,11 +39,20 @@ export class AuthController {
             }
 
             //check is Already Register or Not
-            const isExist = await UserModel.findOne({ email: email });
-            if (isExist) {
+            const isEmail = await UserModel.findOne({ email: email });
+            if (isEmail) {
                 return res.status(409).json({
                     success: false,
-                    message: "You'r Already Register Please! Login"
+                    message: "You'r Already Register This Email Please! Login"
+                })
+            }
+
+            //check is Already Register or Not
+            const isMobile = await UserModel.findOne({ mobileNo: mobileNo });
+            if (isMobile) {
+                return res.status(409).json({
+                    success: false,
+                    message: "You'r Already Register This MobileNo Please! Login"
                 })
             }
 
@@ -118,7 +127,7 @@ export class AuthController {
 
     static async getAllnewUser(req, res) {
         try {
-            const userData = await UserModel.find({})
+            const userData = await UserModel.find({role:"user"})
 
             if (!userData || userData.length == 0) {
                 return sendNotFoundResponse(res, "User not found!!!!")
@@ -228,7 +237,7 @@ export class AuthController {
                     mobileNo: user.mobileNo
                 });
             }
-            
+
             user.otp = undefined;
 
             // If both failed → invalid OTP

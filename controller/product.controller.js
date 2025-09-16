@@ -4,6 +4,8 @@ import CategoryModel from "../model/category.model.js";
 import productModel from "../model/product.model.js";
 import { uploadFile } from "../middleware/imageUpload.js";
 import sellerModel from "../model/seller.model.js";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { s3 } from "../utils/aws.config.js";
 
 
 //new product Insert
@@ -171,6 +173,216 @@ export const getAllProductsController = async (req, res) => {
     } catch (error) {
         console.log("Error during Fetching All Products");
         return sendErrorResponse(res, 500, "Error During Fetching All products", error);
+    }
+};
+
+//update products
+export const updateProductController = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const { id: sellerId } = req.user;
+
+        if (!mongoose.Types.ObjectId.isValid(productId)) {
+            return sendBadRequestResponse(res, "Invalid Product ID");
+        }
+
+        const product = await productModel.findById(productId);
+        if (!product) {
+            return sendErrorResponse(res, 404, "Product not found");
+        }
+
+        // === Update only if seller is owner of product ===
+        if (product.sellerId.toString() !== sellerId.toString()) {
+            return sendErrorResponse(res, 403, "You are not authorized to update this product");
+        }
+
+        const {
+            categoryId,
+            productName,
+            price,
+            originalPrice,
+            discount,
+            totalQuantity,
+            totalUnit,
+            packSizes,
+            productDesc,
+            productHealthBenefit,
+            productStorage
+        } = req.body;
+
+        // === Category validation if updated ===
+        if (categoryId) {
+            if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+                return sendBadRequestResponse(res, "Invalid categoryId");
+            }
+            const categoryExists = await CategoryModel.findById(categoryId);
+            if (!categoryExists) {
+                return sendBadRequestResponse(res, "Category not found");
+            }
+            product.category = categoryId;
+        }
+
+        if (productName) product.productName = productName.trim();
+        if (price != null) product.price = price;
+        if (originalPrice != null) product.originalPrice = originalPrice;
+        if (discount != null) product.discount = discount;
+        if (productDesc) product.productDesc = productDesc;
+        if (productHealthBenefit) product.productHealthBenefit = productHealthBenefit;
+        if (productStorage) product.productStorage = productStorage;
+
+        // === Quantity update ===
+        if (totalQuantity && totalUnit) {
+            const allowedUnits = ["g", "kg", "ml", "l", "pc"];
+            if (!allowedUnits.includes(totalUnit)) {
+                return sendBadRequestResponse(res, `Invalid unit. Allowed: ${allowedUnits.join(", ")}`);
+            }
+            product.totalQuantity = { value: totalQuantity, unit: totalUnit };
+            product.inStock = totalQuantity > 0;
+        }
+
+        // === Parse packSizes ===
+        if (packSizes) {
+            try {
+                const parsedPackSizes = JSON.parse(packSizes);
+                if (!Array.isArray(parsedPackSizes)) {
+                    return sendBadRequestResponse(res, "packSizes must be an array");
+                }
+                product.packSizes = parsedPackSizes;
+            } catch (err) {
+                return sendBadRequestResponse(res, "Invalid packSizes format (must be JSON array)");
+            }
+        }
+
+        // === Product main image update ===
+        const mainImageFile = req.files?.productImage?.[0] || req.file;
+        if (mainImageFile) {
+            // Delete old image from S3
+            if (product.productImageKey) {
+                try {
+                    await s3.send(new DeleteObjectCommand({
+                        Bucket: process.env.S3_BUCKET_NAME,
+                        Key: product.productImageKey
+                    }));
+                } catch (delErr) {
+                    console.error("Failed to delete old product image:", delErr.message);
+                }
+            }
+            const result = await uploadFile(mainImageFile);
+            product.productImage = result.url;
+            product.productImageKey = result.key;
+        }
+
+        // === Gallery images update (replace all if provided) ===
+        if (req.files?.gImage && req.files.gImage.length > 0) {
+            // Delete all old gallery images
+            if (product.gImage && product.gImage.length > 0) {
+                for (const img of product.gImage) {
+                    if (img.gImageKey) {
+                        try {
+                            await s3.send(new DeleteObjectCommand({
+                                Bucket: process.env.S3_BUCKET_NAME,
+                                Key: img.gImageKey
+                            }));
+                        } catch (delErr) {
+                            console.error("Failed to delete old gallery image:", delErr.message);
+                        }
+                    }
+                }
+            }
+
+            // Upload new gallery images
+            const galleryImages = [];
+            for (const file of req.files.gImage) {
+                const result = await uploadFile(file);
+                galleryImages.push({ gImage: result.url, gImageKey: result.key });
+            }
+            product.gImage = galleryImages;
+        }
+
+        await product.save();
+
+        return sendSuccessResponse(res, "Product updated successfully", product);
+
+    } catch (error) {
+        console.error("Update Product Error:", error.message);
+        return sendErrorResponse(res, 500, "Error while updating product", error.message);
+    }
+};
+
+//  Delete Product
+export const deleteProductController = async (req, res) => {
+    try {
+        const { id } = req.params; // productId from params
+        const { id: sellerId } = req.user;
+
+        // Validate productId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return sendBadRequestResponse(res, "Invalid Product ID");
+        }
+
+        // Find product
+        const product = await productModel.findById(id);
+        if (!product) {
+            return sendErrorResponse(res, 404, "Product not found");
+        }
+
+        // Ensure only product owner can delete
+        if (product.sellerId.toString() !== sellerId.toString()) {
+            return sendErrorResponse(
+                res,
+                403,
+                "You are not authorized to delete this product"
+            );
+        }
+
+        // Delete main product image from S3
+        if (product.productImageKey) {
+            try {
+                console.log("Deleting main image:", product.productImageKey);
+                await s3.send(
+                    new DeleteObjectCommand({
+                        Bucket: process.env.S3_BUCKET_NAME,
+                        Key: product.productImageKey, // ✅ only key, not full URL
+                    })
+                );
+            } catch (err) {
+                console.error("❌ Failed to delete main image:", err.message);
+            }
+        }
+
+        // Delete gallery images from S3
+        if (product.gImage?.length > 0) {
+            for (const img of product.gImage) {
+                if (img.gImageKey) {
+                    try {
+                        console.log("Deleting gallery image:", img.gImageKey);
+                        await s3.send(
+                            new DeleteObjectCommand({
+                                Bucket: process.env.S3_BUCKET_NAME,
+                                Key: img.gImageKey,
+                            })
+                        );
+                    } catch (err) {
+                        console.error("❌ Failed to delete gallery image:", err.message);
+                    }
+                }
+            }
+        }
+
+        // Delete product from DB
+        await product.deleteOne();
+
+        // Remove product reference from seller collection
+        await sellerModel.findByIdAndUpdate(
+            sellerId,
+            { $pull: { products: product._id } },
+            { new: true }
+        );
+
+        return sendSuccessResponse(res, "✅ Product deleted successfully");
+    } catch (error) {
+        console.error("Delete Product Error:", error.message);
+        return sendErrorResponse(res, 500, "Error while deleting product", error.message);
     }
 };
 

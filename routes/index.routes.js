@@ -2,15 +2,18 @@ import express from 'express';
 import { AuthController } from '../controller/auth.controller.js';
 import { newSellerController, verifySellerMobileOtpController, sellerLoginController, sellerForgetPasswordController, sellerVerifyForgetOtpController, sellerPasswordResetController, sellerGstVerifyAndInsertController, setSellerBusinessAddressController, sellerGstResetOtpController, sellerBrandInfoAddController, sellerBankInfoSetController, sellerPickUpAddressSetController, trueSellerAgreementController, getAllSeller, getSeller, verifySellerOtpController } from '../controller/seller.controller.js';
 import { CategoryController } from '../controller/category.controller.js';
-import { isUser, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
+import { isAdmin, isUser, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/imageUpload.js';
 import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
-import { filterProductController, getAllProductsController, getPackSizeByIdController, getProductByCategoryController, getProductDetailController, newProductController, searchProductController } from '../controller/product.controller.js';
+import { deleteProductController, filterProductController, getAllProductsController, getPackSizeByIdController, getProductByCategoryController, getProductDetailController, newProductController, searchProductController, updateProductController } from '../controller/product.controller.js';
 import { addToCartController, deleteCartItemController, getMyCartController, updateCartItemController } from '../controller/cart.controller.js';
 import { applyCouponController, createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
 import { downloadInvoiceController, getSellerPaymentsController, makeNewPaymentController, myPaymentController } from '../controller/payment.controller.js';
 import { cancelMyOrderController, deleteMyOrderController, myOrderController, newOrderController, selectUserAddressController, sellerChangeOrderStatusController, updateMyOrderController, userStatusFilterController } from '../controller/order.controller.js';
 import { createOfferController } from '../controller/offer.controller.js';
+import { ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client } from "@aws-sdk/client-s3";
+
 
 const indexRouter = express.Router();
 
@@ -38,14 +41,16 @@ indexRouter.post("/seller/verify/forget/password", sellerVerifyForgetOtpControll
 indexRouter.post("/seller/reset/password", sellerPasswordResetController);
 
 // Category 
-indexRouter.post("/createCategory", sellerAuth, upload.single("category_image"), CategoryController.createCategory)
+indexRouter.post("/createCategory", UserAuth, isAdmin, upload.single("category_image"), CategoryController.createCategory)
 indexRouter.get("/getAllCategory", CategoryController.getAllCategory)
 indexRouter.get("/getCategoryById/:id", CategoryController.getCategoryById)
-indexRouter.put("/updateCategory/:id", sellerAuth, upload.single("category_image"), CategoryController.updateCategory)
-indexRouter.delete("/deleteCategory/:id", sellerAuth, CategoryController.deleteCategory)
+indexRouter.put("/updateCategory/:id", UserAuth, isAdmin, upload.single("category_image"), CategoryController.updateCategory)
+indexRouter.delete("/deleteCategory/:id", UserAuth, isAdmin, CategoryController.deleteCategory)
 
 // Product
 indexRouter.post("/new/product", sellerAuth, upload.fields([{ name: "productImage", maxCount: 1 }, { name: "gImage", maxCount: 5 }]), newProductController);
+indexRouter.patch("/seller/updateProduct/:productId", sellerAuth, upload.fields([{ name: "productImage", maxCount: 1 }, { name: "gImage", maxCount: 5 }]), updateProductController);
+indexRouter.delete("/seller/deleteProduct/:id", sellerAuth, deleteProductController);
 indexRouter.get("/all/products", getAllProductsController); // *
 indexRouter.get("/get/short/productBycategory/:categoryId", getProductByCategoryController);
 indexRouter.get("/get/product/detail/:productId", getProductDetailController)
@@ -132,5 +137,52 @@ indexRouter.post("/new/payment", UserAuth, makeNewPaymentController);
 indexRouter.get("/my/payments", UserAuth, myPaymentController);
 indexRouter.get("/all/payments", sellerAuth, getSellerPaymentsController);
 indexRouter.get("/download/invoice/:paymentId", UserAuth, downloadInvoiceController);
+
+const s3Client = new S3Client({
+    region: process.env.S3_REGION,
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY,
+        secretAccessKey: process.env.S3_SECRET_KEY,
+    },
+});
+
+// List all files in bucket
+indexRouter.get("/listBucket", async (req, res) => {
+    try {
+        const command = new ListObjectsV2Command({ Bucket: process.env.S3_BUCKET_NAME });
+        const response = await s3Client.send(command);
+
+        const files = (response.Contents || []).map(file => ({
+            Key: file.Key,
+            Size: file.Size,
+            LastModified: file.LastModified,
+            ETag: file.ETag,
+            StorageClass: file.StorageClass,
+        }));
+
+        return res.json({ success: true, files });
+    } catch (err) {
+        console.error("Error listing bucket:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// Delete a file from bucket
+indexRouter.delete("/deleteBucketFile", async (req, res) => {
+    try {
+        const { key } = req.body; // example: "images/1757483363902-9.jfif"
+        if (!key) return res.status(400).json({ success: false, message: "File key is required" });
+
+        await s3Client.send(new DeleteObjectCommand({
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: key,
+        }));
+
+        return res.json({ success: true, message: `File deleted successfully: ${key}` });
+    } catch (err) {
+        console.error("Error deleting file:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
 
 export default indexRouter;

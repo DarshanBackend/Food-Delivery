@@ -43,6 +43,7 @@ const orderSchema = new mongoose.Schema(
         deliveryAddress: UserAddressSchema,
 
         totalAmount: { type: Number, required: true, default: 0 },
+        platformFee: { type: Number, default: 0 },
         discount: { type: Number, default: 0 },
         finalAmount: { type: Number, required: true, default: 0 },
         appliedCoupon: { type: String, default: null },
