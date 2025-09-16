@@ -3,7 +3,11 @@ import { sendBadRequestResponse, sendErrorResponse, sendNotFoundResponse, sendSu
 import UserModel from "../model/user.model.js";
 import orderModel from "../model/order.model.js";
 import productModel from "../model/product.model.js";
+<<<<<<< HEAD
 import cartModel from "../model/cart.model.js";
+=======
+import couponModel from "../model/coupon.model.js";
+>>>>>>> origin/heet16-09
 
 
 //select address for delivery
@@ -474,57 +478,64 @@ export const cancelMyOrderController = async (req, res) => {
 
 export const sellerChangeOrderStatusController = async (req, res) => {
     try {
-        const sellerId = req?.user?.id;
-        const { orderId, itemId } = req.params; // orderId for full order, itemId for single item
+        const sellerId = req?.user?.id; // seller id from JWT
+        const { orderId, itemId } = req.params; // itemId optional
         const { status } = req.body;
 
         const allowedStatus = ["pending", "packing", "out for delivery", "delivered", "cancelled"];
 
-        // 1. Validate sellerId
+        // 1️⃣ Validate sellerId
         if (!sellerId || !mongoose.Types.ObjectId.isValid(sellerId)) {
-            return sendBadRequestResponse(res, "Invalid sellerId");
+            return res.status(400).json({ success: false, message: "Seller ID is missing or invalid. Please login again." });
         }
 
-        // 2. Validate status
+        // 2️⃣ Validate status
         if (!status || !allowedStatus.includes(status)) {
-            return sendBadRequestResponse(res, `Status must be one of: ${allowedStatus.join(", ")}`);
+            return res.status(400).json({
+                success: false,
+                message: "Please select a valid status: Pending, Packing, Out for Delivery, Delivered, or Cancelled."
+            });
         }
 
         let order;
-        let totalAmount = 0;
 
+        // 3️⃣ Update single item
         if (itemId) {
-            // 3a. Update single item status
             if (!mongoose.Types.ObjectId.isValid(itemId)) {
-                return sendBadRequestResponse(res, "Invalid itemId");
+                return res.status(400).json({ success: false, message: "The item you are trying to update is invalid." });
             }
 
-            order = await orderModel.findOne({ "items._id": itemId, "items.sellerId": sellerId }).populate("items.productId");
-            if (!order) return sendNotFoundResponse(res, "Order item not found for this seller");
+            order = await orderModel.findOne({
+                items: { $elemMatch: { _id: itemId, sellerId: sellerId } }
+            }).populate("items.productId");
+
+            if (!order) return res.status(404).json({ success: false, message: "Sorry, we couldn’t find this item in your orders." });
 
             const item = order.items.id(itemId);
-            if (!item) return sendNotFoundResponse(res, "Item not found in order");
 
-            // Prevent invalid status changes
+            // Prevent invalid changes
             if (item.status === "cancelled" && status !== "cancelled") {
-                return sendBadRequestResponse(res, "Cannot change status of a cancelled item");
+                return res.status(400).json({ success: false, message: "This item was cancelled and its status cannot be changed." });
             }
             if (item.status === "delivered" && status !== "delivered") {
-                return sendBadRequestResponse(res, "Cannot change status of a delivered item");
+                return res.status(400).json({ success: false, message: "This item is already delivered and cannot be updated." });
             }
 
             item.status = status;
 
         } else {
-            // 3b. Update entire order status
+            // 4️⃣ Update all items for this seller
             if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
-                return sendBadRequestResponse(res, "Invalid orderId");
+                return res.status(400).json({ success: false, message: "Order ID is invalid." });
             }
 
-            order = await orderModel.findOne({ _id: orderId, "items.sellerId": sellerId }).populate("items.productId");
-            if (!order) return sendNotFoundResponse(res, "Order not found for this seller");
+            order = await orderModel.findOne({
+                _id: orderId,
+                items: { $elemMatch: { sellerId: sellerId } }
+            }).populate("items.productId");
 
-            // Update all items belonging to this seller
+            if (!order) return res.status(404).json({ success: false, message: "We couldn’t find any order matching your selection." });
+
             order.items.forEach(item => {
                 if (item.sellerId.toString() === sellerId) {
                     if (item.status !== "delivered" && item.status !== "cancelled") {
@@ -534,22 +545,22 @@ export const sellerChangeOrderStatusController = async (req, res) => {
             });
         }
 
-        // 4. Recalculate totalAmount excluding cancelled items
+        // 5️⃣ Recalculate totalAmount excluding cancelled items
+        let totalAmount = 0;
         order.items.forEach(i => {
             if (i.status !== "cancelled") {
-                totalAmount += i.productId?.price || 0 * i.quantity;
+                totalAmount += (i.productId?.price || 0) * i.quantity;
             }
         });
         order.totalAmount = totalAmount;
 
-        // 5. Recalculate finalAmount if a coupon is applied
+        // 6️⃣ Recalculate finalAmount with coupon if applied
         if (order.appliedCoupon) {
-            const coupon = await CouponModel.findOne({ code: order.appliedCoupon, isActive: true });
+            const coupon = await couponModel.findOne({ code: order.appliedCoupon, isActive: true });
             let discount = 0;
 
             if (coupon) {
                 if (totalAmount < coupon.minOrderValue) {
-                    // Remove coupon if order total below minimum
                     order.appliedCoupon = null;
                 } else {
                     if (coupon.discountType === "percentage") {
@@ -568,17 +579,31 @@ export const sellerChangeOrderStatusController = async (req, res) => {
             order.finalAmount = totalAmount;
         }
 
+        // 7️⃣ Calculate overall orderStatus based on item statuses
+        const itemStatuses = order.items.map(i => i.status);
+        if (itemStatuses.every(s => s === "delivered")) {
+            order.orderStatus = "completed";
+        } else if (itemStatuses.every(s => s === "cancelled")) {
+            order.orderStatus = "cancelled";
+        } else {
+            order.orderStatus = "processing";
+        }
+
         await order.save();
 
-        return sendSuccessResponse(
-            res,
-            itemId ? "Order item status updated successfully" : "Order status updated successfully",
+        return res.status(200).json({
+            success: true,
+            message: itemId ? "Order item status updated successfully." : "Order status updated successfully.",
             order
-        );
+        });
 
     } catch (error) {
         console.error("Error updating order status:", error);
-        return sendErrorResponse(res, 500, "Error updating order status", error?.message || error);
+        return res.status(500).json({
+            success: false,
+            message: "Error updating order status.",
+            error: error.message
+        });
     }
 };
 

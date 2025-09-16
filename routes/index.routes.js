@@ -8,7 +8,7 @@ import { getProfileController, getSellerProfileController, getUserAddressControl
 import { deleteProductController, filterProductController, getAllProductsController, getPackSizeByIdController, getProductByCategoryController, getProductDetailController, newProductController, searchProductController, updateProductController } from '../controller/product.controller.js';
 import { addToCartController, deleteCartItemController, getMyCartController, updateCartItemController } from '../controller/cart.controller.js';
 import { applyCouponController, createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
-import { downloadInvoiceController, getSellerPaymentsController, makeNewPaymentController, myPaymentController } from '../controller/payment.controller.js';
+import { downloadInvoiceController, getSellerPaymentsController, makeNewPaymentController, myPaymentController, paymentStatusChangeController } from '../controller/payment.controller.js';
 import { cancelMyOrderController, deleteMyOrderController, myOrderController, newOrderController, selectUserAddressController, sellerChangeOrderStatusController, updateMyOrderController, userStatusFilterController } from '../controller/order.controller.js';
 import { createOfferController } from '../controller/offer.controller.js';
 import { ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
@@ -127,8 +127,9 @@ indexRouter.patch("/update/myorder/:orderId", UserAuth, updateMyOrderController)
 indexRouter.delete("/delete/myorder/:itemId", UserAuth, deleteMyOrderController);
 indexRouter.post("/user/order/cancel/:itemId", UserAuth, cancelMyOrderController);
 indexRouter.get("/my/order", UserAuth, myOrderController);
-indexRouter.get("/status/filter", UserAuth, userStatusFilterController); // order status filter
-indexRouter.patch("/order/status/:itemId", sellerAuth, sellerChangeOrderStatusController); // seller side status change
+indexRouter.get("/status/filter", UserAuth, userStatusFilterController);
+indexRouter.patch("/seller/order/status/:orderId/:itemId", sellerAuth, sellerChangeOrderStatusController);
+
 
 
 
@@ -137,6 +138,7 @@ indexRouter.post("/new/payment", UserAuth, makeNewPaymentController);
 indexRouter.get("/my/payments", UserAuth, myPaymentController);
 indexRouter.get("/all/payments", sellerAuth, getSellerPaymentsController);
 indexRouter.get("/download/invoice/:paymentId", UserAuth, downloadInvoiceController);
+indexRouter.patch("/payment/status/:paymentId", sellerAuth, paymentStatusChangeController);
 
 const s3Client = new S3Client({
     region: process.env.S3_REGION,
