@@ -3,11 +3,7 @@ import { sendBadRequestResponse, sendErrorResponse, sendNotFoundResponse, sendSu
 import UserModel from "../model/user.model.js";
 import orderModel from "../model/order.model.js";
 import productModel from "../model/product.model.js";
-<<<<<<< HEAD
 import cartModel from "../model/cart.model.js";
-=======
-import couponModel from "../model/coupon.model.js";
->>>>>>> origin/heet16-09
 
 
 //select address for delivery
