@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { sendBadRequestResponse, sendErrorResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/Response.utils.js";
 import CategoryModel from "../model/category.model.js";
 import productModel from "../model/product.model.js";
-import { uploadFile } from "../middleware/imageUpload.js";
+import { uploadFile } from "../middleware/imageupload.js";
 import sellerModel from "../model/seller.model.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { s3 } from "../utils/aws.config.js";

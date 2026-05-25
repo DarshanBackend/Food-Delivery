@@ -3,7 +3,7 @@ import { AuthController } from '../controller/auth.controller.js';
 import { newSellerController, verifySellerMobileOtpController, sellerLoginController, sellerForgetPasswordController, sellerVerifyForgetOtpController, sellerPasswordResetController, sellerGstVerifyAndInsertController, setSellerBusinessAddressController, sellerGstResetOtpController, sellerBrandInfoAddController, sellerBankInfoSetController, sellerPickUpAddressSetController, trueSellerAgreementController, getAllSeller, getSeller, verifySellerOtpController } from '../controller/seller.controller.js';
 import { CategoryController } from '../controller/category.controller.js';
 import { isAdmin, isUser, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
-import { upload } from '../middleware/imageUpload.js';
+import { upload } from '../middleware/imageupload.js';
 import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
 import { deleteProductController, filterProductController, getAllProductsController, getPackSizeByIdController, getProductByCategoryController, getProductDetailController, newProductController, searchProductController, updateProductController } from '../controller/product.controller.js';
 import { addToCartController, deleteCartItemController, getMyCartController, updateCartItemController } from '../controller/cart.controller.js';

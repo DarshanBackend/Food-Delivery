@@ -4,7 +4,7 @@ import CategoryModel from "../model/category.model.js";
 import { sendBadRequestResponse, sendCreatedResponse, sendErrorResponse, sendSuccessResponse } from "../utils/Response.utils.js";
 import { s3, publicUrlForKey, cleanupUploadedIfAny } from "../utils/aws.config.js";
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { uploadFile } from "../middleware/imageUpload.js";
+import { uploadFile } from "../middleware/imageupload.js";
 
 export class CategoryController {
 

@@ -1,4 +1,4 @@
-import { uploadFile } from "../middleware/imageUpload.js";
+import { uploadFile } from "../middleware/imageupload.js";
 import offerModel from "../model/offer.model.js";
 
 export const createOfferController = async (req, res) => {

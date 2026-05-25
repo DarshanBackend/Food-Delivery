@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { sendBadRequestResponse, sendErrorResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/Response.utils.js";
 import UserModel from "../model/user.model.js";
-import { uploadFile } from "../middleware/imageUpload.js";
+import { uploadFile } from "../middleware/imageupload.js";
 import axios from "axios";
 import bcrypt from 'bcryptjs';
 import sellerModel from "../model/seller.model.js";
@@ -329,7 +329,7 @@ export const getSellerProfileController = async (req, res) => {
             return sendErrorResponse(res, 400, "Seller ID missing from token");
         }
 
-        const seller = await sellerModel.findById(id).select("-password"); 
+        const seller = await sellerModel.findById(id).select("-password");
         // exclude password field for security
 
         if (!seller) {
