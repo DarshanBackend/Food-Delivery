@@ -5,12 +5,12 @@ import { CategoryController } from '../controller/category.controller.js';
 import { isAdmin, isUser, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/imageupload.js';
 import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
-import { deleteProductController, filterProductController, getAllProductsController, getPackSizeByIdController, getProductByCategoryController, getProductDetailController, newProductController, searchProductController, updateProductController } from '../controller/product.controller.js';
+import { deleteProductController, filterProductController, getAllProductsController, getGardenFreshProductsController, getPackSizeByIdController, getProductByCategoryController, getProductByCategoryId, getProductDetailController, getSeasonalProductsController, newProductController, searchProductController, updateProductController } from '../controller/product.controller.js';
 import { addToCartController, deleteCartItemController, getMyCartController, updateCartItemController } from '../controller/cart.controller.js';
 import { applyCouponController, createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
 import { downloadInvoiceController, getSellerPaymentsController, makeNewPaymentController, myPaymentController, paymentStatusChangeController } from '../controller/payment.controller.js';
 import { cancelMyOrderController, deleteMyOrderController, myOrderController, newOrderController, selectUserAddressController, sellerChangeOrderStatusController, updateMyOrderController, userStatusFilterController } from '../controller/order.controller.js';
-import { createOfferController } from '../controller/offer.controller.js';
+import { createOfferController, getAllOffersController, getOfferByIdController, updateOfferController, deleteOfferController } from '../controller/offer.controller.js';
 import { ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { S3Client } from "@aws-sdk/client-s3";
 
@@ -43,6 +43,7 @@ indexRouter.post("/seller/reset/password", sellerPasswordResetController);
 // Category 
 indexRouter.post("/createCategory", UserAuth, isAdmin, upload.single("category_image"), CategoryController.createCategory)
 indexRouter.get("/getAllCategory", CategoryController.getAllCategory)
+indexRouter.get("/getTopCategories", CategoryController.getTopCategories)
 indexRouter.get("/getCategoryById/:id", CategoryController.getCategoryById)
 indexRouter.put("/updateCategory/:id", UserAuth, isAdmin, upload.single("category_image"), CategoryController.updateCategory)
 indexRouter.delete("/deleteCategory/:id", UserAuth, isAdmin, CategoryController.deleteCategory)
@@ -53,6 +54,9 @@ indexRouter.patch("/seller/updateProduct/:productId", sellerAuth, upload.fields(
 indexRouter.delete("/seller/deleteProduct/:id", sellerAuth, deleteProductController);
 indexRouter.get("/all/products", getAllProductsController); // *
 indexRouter.get("/get/short/productBycategory/:categoryId", getProductByCategoryController);
+indexRouter.get("/get/productBycategory/:categoryId", getProductByCategoryId);
+indexRouter.get("/seasonal/products", getSeasonalProductsController);
+indexRouter.get("/garden-fresh/products", getGardenFreshProductsController);
 indexRouter.get("/get/product/detail/:productId", getProductDetailController)
 indexRouter.get("/search", searchProductController);
 indexRouter.get("/filter", filterProductController);
@@ -60,6 +64,10 @@ indexRouter.get("/packSize/:packSizeId", getPackSizeByIdController);
 
 //offer.routes.js
 indexRouter.post("/seller/create/offer", sellerAuth, upload.single("offerImage"), createOfferController);
+indexRouter.get("/getAlloffers", getAllOffersController);
+indexRouter.get("/getOffersById/:id", getOfferByIdController);
+indexRouter.patch("/seller/update/offer/:id", sellerAuth, upload.single("offerImage"), updateOfferController);
+indexRouter.delete("/seller/delete/offer/:id", sellerAuth, deleteOfferController);
 
 
 

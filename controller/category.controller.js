@@ -55,6 +55,57 @@ export class CategoryController {
         }
     }
 
+    // Get top categories based on order items
+    static async getTopCategories(req, res) {
+        try {
+            const OrderModel = mongoose.model("order");
+            const topCategories = await OrderModel.aggregate([
+                { $unwind: "$items" },
+                { $match: { "items.status": { $ne: "cancelled" } } },
+                {
+                    $lookup: {
+                        from: "products",
+                        localField: "items.productId",
+                        foreignField: "_id",
+                        as: "productDetails"
+                    }
+                },
+                { $unwind: "$productDetails" },
+                {
+                    $group: {
+                        _id: "$productDetails.category",
+                        orderCount: { $sum: 1 },
+                        totalQuantity: { $sum: "$items.quantity" }
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "categories",
+                        localField: "_id",
+                        foreignField: "_id",
+                        as: "categoryDetails"
+                    }
+                },
+                { $unwind: "$categoryDetails" },
+                {
+                    $project: {
+                        _id: 1,
+                        category_name: "$categoryDetails.category_name",
+                        category_image: "$categoryDetails.category_image",
+                        category_image_key: "$categoryDetails.category_image_key",
+                        orderCount: 1,
+                        totalQuantity: 1
+                    }
+                },
+                { $sort: { orderCount: -1 } }
+            ]);
+
+            return sendSuccessResponse(res, "Top categories fetched successfully", topCategories);
+        } catch (error) {
+            return ThrowError(res, 500, error.message);
+        }
+    }
+
     // Get category by ID
     static async getCategoryById(req, res) {
         try {

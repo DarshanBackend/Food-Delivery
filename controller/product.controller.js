@@ -430,6 +430,27 @@ export const getProductByCategoryController = async (req, res) => {
     }
 };
 
+// Get all products by Category ID (full details)
+export const getProductByCategoryId = async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+
+        if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
+            return sendBadRequestResponse(res, "Category ID is required!");
+        }
+
+        const products = await productModel.find({ category: categoryId }).populate("category");
+
+        return sendSuccessResponse(res, "Products fetched successfully", {
+            total: products.length,
+            products: products
+        });
+    } catch (error) {
+        console.error("Error in getProductByCategoryId:", error);
+        return sendErrorResponse(res, 500, "Error during fetching products by category", error.message);
+    }
+};
+
 //get Product By Category
 export const getProductDetailController = async (req, res) => {
     try {
@@ -669,3 +690,55 @@ export const getPackSizeByIdController = async (req, res) => {
         return sendErrorResponse(res, 500, "Internal server error");
     }
 };
+
+// Get all products belonging to the 'Seasonal' category
+export const getSeasonalProductsController = async (req, res) => {
+    try {
+        // Find category with name 'Seasonal' case-insensitively
+        const category = await CategoryModel.findOne({ category_name: { $regex: /^seasonal$/i } });
+        if (!category) {
+            return sendSuccessResponse(res, "Seasonal category not found", {
+                total: 0,
+                products: []
+            });
+        }
+
+        // Find products belonging to the seasonal category
+        const products = await productModel.find({ category: category._id }).populate("category");
+
+        return sendSuccessResponse(res, "Seasonal products fetched successfully", {
+            total: products.length,
+            products: products
+        });
+    } catch (error) {
+        console.error("Error in getSeasonalProductsController:", error);
+        return sendErrorResponse(res, 500, "Error during fetching seasonal products", error.message);
+    }
+};
+
+export const getGardenFreshProductsController = async (req, res) => {
+    try {
+        const productNames = [
+            "Hybrid Tomato",
+            "Onion",
+            "Potato",
+            "Green Chilli",
+            "Lady Finger",
+            "Cauliflower"
+        ];
+
+        const queryRegexes = productNames.map(name => new RegExp(`^${name}$`, 'i'));
+        const products = await productModel.find({
+            productName: { $in: queryRegexes }
+        }).populate("category");
+
+        return sendSuccessResponse(res, "Garden Fresh products fetched successfully", {
+            total: products.length,
+            products: products
+        });
+    } catch (error) {
+        console.error("Error in getGardenFreshProductsController:", error);
+        return sendErrorResponse(res, 500, "Error during fetching Garden Fresh products", error.message);
+    }
+};
+
