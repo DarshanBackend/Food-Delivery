@@ -3,6 +3,11 @@ import { UserAddressSchema } from "./user.model.js";
 
 const orderSchema = new mongoose.Schema(
     {
+        orderId: {
+            type: String,
+            unique: true,
+            sparse: true
+        },
         userId: {
             type: mongoose.Types.ObjectId,
             ref: "user",
@@ -47,6 +52,28 @@ const orderSchema = new mongoose.Schema(
         discount: { type: Number, default: 0 },
         finalAmount: { type: Number, required: true, default: 0 },
         appliedCoupon: { type: String, default: null },
+        orderStatus: { type: String, default: "Pending" },
+        status: { type: String, default: "Pending" },
+        paymentStatus: { type: String, default: "Pending" },
+        stripePaymentIntentId: { type: String, default: null },
+        clientSecret: { type: String, default: null },
+        refundStatus: {
+            type: String,
+            enum: ["refund initiated", "under progress", "delivered"],
+            default: null,
+        },
+        statusTimeline: {
+            confirmedAt: { type: Date, default: null },
+            processingAt: { type: Date, default: null },
+            shippedAt: { type: Date, default: null },
+            deliveredAt: { type: Date, default: null },
+            cancelledAt: { type: Date, default: null }
+        },
+        refundTimeline: {
+            initiatedAt: { type: Date, default: null },
+            processingAt: { type: Date, default: null },
+            deliveredAt: { type: Date, default: null }
+        }
     },
     { timestamps: true }
 );

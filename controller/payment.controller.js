@@ -1,9 +1,12 @@
 import mongoose from "mongoose";
-import { sendErrorResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/Response.utils.js";
+import Stripe from "stripe";
+import { sendBadRequestResponse, sendErrorResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/Response.utils.js";
 import orderModel from "../model/order.model.js";
 import paymentModel from "../model/payment.model.js";
 import cartModel from "../model/cart.model.js";
-import PDFDocument from "pdfkit";
+import productModel from "../model/product.model.js";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET);
 
 export const makeNewPaymentController = async (req, res) => {
     try {
@@ -13,13 +16,17 @@ export const makeNewPaymentController = async (req, res) => {
             paymentMethod,
             transactionId,
             cardDetails,
-            paypalDetails,
-            bankTransferDetails,
         } = req.body;
 
         // Validate required fields
         if (!userId || !orderId || !paymentMethod) {
             return res.status(400).json({ success: false, message: "Missing required fields" });
+        }
+
+        // Validate paymentMethod enum
+        const allowedMethods = ["credit_card", "cash_on_delivery", "upi"];
+        if (!allowedMethods.includes(paymentMethod)) {
+            return res.status(400).json({ success: false, message: `Invalid payment method. Allowed: ${allowedMethods.join(", ")}` });
         }
 
         // Fetch order
@@ -31,16 +38,38 @@ export const makeNewPaymentController = async (req, res) => {
         // Use order.finalAmount as the payment amount
         const amount = order.finalAmount;
 
+        let stripePaymentIntentId = null;
+        let clientSecret = null;
+        let paymentStatus = "Pending";
+
+        if (paymentMethod === "credit_card" || paymentMethod === "upi") {
+            try {
+                // Create Stripe PaymentIntent
+                const paymentIntent = await stripe.paymentIntents.create({
+                    amount: Math.round(amount * 100), // in cents
+                    currency: "usd", // default currency
+                    metadata: { orderId: orderId.toString(), userId: userId.toString() },
+                    payment_method_types: paymentMethod === "credit_card" ? ["card"] : ["upi"],
+                });
+                stripePaymentIntentId = paymentIntent.id;
+                clientSecret = paymentIntent.client_secret;
+            } catch (stripeError) {
+                console.error("Stripe Intent Creation Error:", stripeError);
+                return res.status(500).json({ success: false, message: "Stripe PaymentIntent creation failed", error: stripeError.message });
+            }
+        }
+
         // Create Payment record
         const payment = await paymentModel.create({
             userId,
             orderId,
             amount,
             paymentMethod,
-            transactionId: transactionId || null, // from gateway if available
+            paymentStatus,
+            transactionId: transactionId || null,
             cardDetails,
-            paypalDetails,
-            bankTransferDetails,
+            stripePaymentIntentId,
+            clientSecret,
         });
 
         // === Remove ordered items from user's cart ===
@@ -60,10 +89,22 @@ export const makeNewPaymentController = async (req, res) => {
             );
         }
 
+        // Add stripe credentials to order document if needed
+        order.stripePaymentIntentId = stripePaymentIntentId;
+        order.clientSecret = clientSecret;
+        order.paymentStatus = "Pending";
+        order.orderStatus = "Pending";
+        order.status = "Pending";
+        await order.save();
+
         return res.status(201).json({
             success: true,
-            message: "Payment record created & ordered items removed from cart",
+            message: paymentMethod === "cash_on_delivery"
+                ? "Payment record created (COD) & ordered items removed from cart"
+                : "Stripe PaymentIntent created & ordered items removed from cart",
             data: payment,
+            clientSecret,
+            stripePaymentIntentId
         });
     } catch (error) {
         console.error("Payment Error:", error);
@@ -75,271 +116,381 @@ export const makeNewPaymentController = async (req, res) => {
     }
 };
 
-
-export const myPaymentController = async (req, res) => {
-    try {
-        const userId = req?.user?.id;
-        if (!userId) {
-            return sendErrorResponse(res, 400, "User ID is required");
-        }
-        const payments = await paymentModel.find({ userId })
-            .populate({
-                path: "orderId",
-                populate: [
-                    {
-                        path: "items.productId",
-                        select: "productName price productImage"
-                    },
-                    {
-                        path: "items.sellerId",
-                        select: "storeName businessName email mobileNo pickUpAddr"
-                    },
-                    {
-                        path: "items.packSizeId",
-                        select: "weight unit price"
-                    }
-                ]
-            });
-
-
-        return sendSuccessResponse(res, "User payments fetched", payments);
-    } catch (error) {
-        return sendErrorResponse(res, 500, "Server error", error.message);
+export const confirmStripePaymentController = async (req, res) => {
+    if (!req.user || !req.user.id) {
+        return sendErrorResponse(res, 401, "Authentication required. Please log in.");
     }
-}
 
+    const session = await mongoose.startSession();
 
-export const getSellerPaymentsController = async (req, res) => {
     try {
-        const sellerId = req.user.id; // logged-in seller
-        if (!sellerId) {
-            return res.status(400).json({ success: false, message: "Seller ID is required" });
+        await session.startTransaction();
+
+        const userId = req.user.id;
+        const { paymentIntentId, orderId } = req.body;
+
+        if (!paymentIntentId || !orderId) {
+            return sendBadRequestResponse(res, "Payment Intent ID and Order ID are required");
         }
 
-        // Fetch payments with nested order and items
-        const payments = await paymentModel.find()
-            .populate("userId", "name email mobileNo")
-            .populate({
-                path: "orderId",
-                populate: [
-                    { path: "items.productId", select: "productName price productImage" },
-                    { path: "items.sellerId", select: "storeName businessName email mobileNo pickUpAddr" },
-                    { path: "items.packSizeId", select: "sizeName quantity" },
-                    { path: "deliveryAddress" }
-                ]
-            })
-            .sort({ createdAt: -1 });
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-        // Filter payments for this seller only
-        const sellerPayments = payments
-            .map(payment => {
-                // Filter items that belong to this seller
-                const sellerItems = payment.orderId.items.filter(item =>
-                    item.sellerId._id.toString() === sellerId
-                );
+        if (paymentIntent.status !== 'succeeded') {
+            return sendErrorResponse(res, 400, `Payment not completed. Status: ${paymentIntent.status}`);
+        }
 
-                if (sellerItems.length === 0) return null; // skip payments with no items for this seller
+        const payment = await paymentModel.findOne({
+            stripePaymentIntentId: paymentIntentId,
+            userId: userId
+        }).session(session);
 
-                return {
-                    ...payment.toObject(),
-                    orderId: {
-                        ...payment.orderId.toObject(),
-                        items: sellerItems
+        if (!payment) {
+            return sendNotFoundResponse(res, "Payment record not found");
+        }
+
+        const order = await orderModel.findById(orderId).session(session);
+
+        if (!order) {
+            return sendNotFoundResponse(res, "Order not found");
+        }
+
+        if (order.userId.toString() !== userId.toString()) {
+            return sendErrorResponse(res, 403, "You are not authorized to confirm this order");
+        }
+
+        payment.paymentStatus = "Paid";
+        payment.paymentDate = new Date();
+        await payment.save({ session });
+
+        order.orderStatus = "Pending";
+        order.status = "Pending";
+        order.paymentStatus = "Paid";
+        await order.save({ session });
+
+        // Decrease stock for each item in the order using the positional operator
+        for (const item of order.items) {
+            await productModel.updateOne(
+                { _id: item.productId, "packSizes._id": item.packSizeId },
+                {
+                    $inc: {
+                        "packSizes.$.stock": -item.quantity,
+                        "soldCount": item.quantity
                     }
-                };
-            })
-            .filter(payment => payment !== null);
+                },
+                { session }
+            );
+        }
 
-        return res.status(200).json({
-            success: true,
-            count: sellerPayments.length,
-            data: sellerPayments
+        await session.commitTransaction();
+
+        return sendSuccessResponse(res, "Payment confirmed successfully", {
+            paymentId: payment._id,
+            orderId: order._id,
+            orderStatus: order.orderStatus,
+            paymentStatus: payment.paymentStatus,
+            amount: payment.amount,
+            currency: "USD"
         });
 
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Server error",
-            error: error.message
-        });
+        await session.abortTransaction();
+        console.error("Payment confirmation error:", error);
+        return sendErrorResponse(res, 500, "Error confirming payment", error.message);
+    } finally {
+        session.endSession();
     }
 };
 
+export const testConfirmStripePayment = async (req, res) => {
+    const session = await mongoose.startSession();
 
-export const downloadInvoiceController = async (req, res) => {
     try {
-        const { paymentId } = req.params;
+        await session.startTransaction();
 
-        if (!paymentId || !mongoose.Types.ObjectId.isValid(paymentId)) {
+        const userId = req.user.id;
+        const { orderId } = req.body;
+
+        if (!orderId) {
+            return sendBadRequestResponse(res, "Order ID is required");
+        }
+
+        const order = await orderModel.findById(orderId).session(session);
+        if (!order) {
+            return sendNotFoundResponse(res, "Order not found");
+        }
+
+        let payment = await paymentModel.findOne({ orderId: order._id, userId }).session(session);
+
+        if (!payment) {
+            payment = new paymentModel({
+                userId,
+                orderId: order._id,
+                amount: order.finalAmount,
+                stripePaymentIntentId: order.stripePaymentIntentId || `test_intent_${Date.now()}`,
+                clientSecret: order.clientSecret || `test_secret_${Date.now()}`,
+                paymentStatus: "Pending",
+                paymentMethod: "credit_card"
+            });
+            await payment.save({ session });
+        }
+
+        payment.paymentStatus = "Paid";
+        payment.paymentDate = new Date();
+        await payment.save({ session });
+
+        order.paymentStatus = "Paid";
+        order.orderStatus = "Pending";
+        order.status = "Pending";
+        await order.save({ session });
+
+        // Decrease stock for each item in the order using the positional operator
+        for (const item of order.items) {
+            await productModel.updateOne(
+                { _id: item.productId, "packSizes._id": item.packSizeId },
+                {
+                    $inc: {
+                        "packSizes.$.stock": -item.quantity,
+                        "soldCount": item.quantity
+                    }
+                },
+                { session }
+            );
+        }
+
+        await session.commitTransaction();
+
+        return sendSuccessResponse(res, "Payment confirmed successfully (TEST MODE)", {
+            orderId: order._id,
+            orderStatus: order.orderStatus,
+            paymentStatus: payment.paymentStatus,
+            amount: payment.amount,
+            stripePaymentIntentId: payment.stripePaymentIntentId,
+            clientSecret: payment.clientSecret,
+            message: "This is a test confirmation - no actual Stripe payment was processed",
+        });
+
+    } catch (error) {
+        await session.abortTransaction();
+        console.error("Test payment confirmation error:", error);
+        return sendErrorResponse(res, 500, "Error confirming test payment", error.message);
+    } finally {
+        session.endSession();
+    }
+};
+
+export const getPaymentStatusController = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { orderId } = req.params;
+
+        const payment = await paymentModel.findOne({
+            orderId,
+            userId
+        }).populate('orderId');
+
+        if (!payment) {
+            return sendNotFoundResponse(res, "Payment not found");
+        }
+
+        if ((payment.paymentMethod === "credit_card" || payment.paymentMethod === "upi") && payment.paymentStatus === "Pending") {
+            try {
+                const paymentIntent = await stripe.paymentIntents.retrieve(payment.stripePaymentIntentId);
+
+                if (paymentIntent.status === 'succeeded') {
+                    payment.paymentStatus = "Paid";
+                    payment.paymentDate = new Date();
+                    await payment.save();
+
+                    await orderModel.findByIdAndUpdate(orderId, {
+                        orderStatus: "Pending",
+                        status: "Pending",
+                        paymentStatus: "Paid"
+                    });
+                }
+            } catch (stripeError) {
+                console.error("Stripe status check error:", stripeError);
+            }
+        }
+
+        const updatedOrder = await orderModel.findById(orderId);
+
+        return sendSuccessResponse(res, "Payment status retrieved", {
+            paymentId: payment._id,
+            orderId: payment.orderId._id,
+            orderStatus: updatedOrder.orderStatus,
+            paymentStatus: payment.paymentStatus,
+            paymentMethod: payment.paymentMethod,
+            amount: payment.amount,
+            clientSecret: payment.clientSecret,
+            stripePaymentIntentId: payment.stripePaymentIntentId
+        });
+
+    } catch (error) {
+        console.error("Get payment status error:", error);
+        return sendErrorResponse(res, 500, "Error retrieving payment status", error.message);
+    }
+};
+
+export const verifyPayment = async (req, res) => {
+    try {
+        const { clientSecret, orderId } = req.body;
+
+        if (!clientSecret || !orderId) {
             return res.status(400).json({
                 success: false,
-                message: "Valid payment ID is required"
+                message: "clientSecret and orderId are required",
             });
         }
 
-        const payment = await paymentModel.findById(paymentId)
-            .populate("userId", "name email mobileNo")
-            .populate({
-                path: "orderId",
-                populate: [
-                    { path: "items.productId", select: "productName price" },
-                    { path: "items.sellerId", select: "storeName businessName email mobileNo pickUpAddr" },
-                    { path: "items.packSizeId", select: "sizeName quantity" },
-                    { path: "deliveryAddress" }
-                ]
-            });
+        const paymentIntentId = clientSecret.split("_secret_")[0];
 
-        if (!payment) {
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        const stripeStatus = paymentIntent.status;
+        const transactionId = paymentIntent.id;
+
+        let paymentStatus = "Pending";
+        let orderPaymentStatus = "Pending";
+        let orderStatus = "Pending";
+
+        if (stripeStatus === "succeeded") {
+            paymentStatus = "Paid";
+            orderPaymentStatus = "Paid";
+            orderStatus = "Pending";
+        } else if (stripeStatus === "processing") {
+            paymentStatus = "Processing";
+            orderPaymentStatus = "Processing";
+            orderStatus = "Processing";
+        } else {
+            paymentStatus = "Failed";
+            orderPaymentStatus = "Failed";
+            orderStatus = "Pending";
+        }
+
+        const paymentDoc = await paymentModel.findOneAndUpdate(
+            { clientSecret, orderId },
+            { paymentStatus, transactionId },
+            { new: true }
+        );
+
+        if (!paymentDoc) {
             return res.status(404).json({
                 success: false,
-                message: "Payment not found"
+                message: "Payment record not found",
             });
         }
 
-        // Create PDF
-        const doc = new PDFDocument({ margin: 50, size: "A4" });
-
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `attachment; filename=FastCart_Invoice_${paymentId}.pdf`);
-        doc.pipe(res);
-
-        doc.rect(50, 40, doc.page.width - 100, 40)
-            .fill("#2E86C1");
-
-        doc.fillColor("white")
-            .fontSize(20)
-            .text("Invoice", 50, 50, { align: "center" });
-
-        // Reset color for next text
-        doc.fillColor("black");
-
-        // Invoice Header
-        doc.fontSize(20).text("Invoice", { align: "center" });
-        doc.moveDown();
-
-        // ===== Payment Info =====
-        doc
-            .fillColor("#333333")
-            .fontSize(12)
-            .text(`Invoice ID: ${payment._id}`)
-            .text(`Payment Method: ${payment.paymentMethod}`)
-            .text(`Payment Status: ${payment.paymentStatus}`)
-            .text(`Payment Date: ${payment.paymentDate.toDateString()}`);
-        doc.moveDown();
-
-        // ===== Customer Info =====
-        doc
-            .fillColor("#1E90FF")
-            .fontSize(14)
-            .text("Customer Information", { underline: true });
-        doc.moveDown(0.2);
-        doc
-            .fillColor("#333333")
-            .fontSize(12)
-            .text(`Name: ${payment.userId.name}`)
-            .text(`Email: ${payment.userId.email}`)
-            .text(`Mobile: ${payment.userId.mobileNo}`);
-        doc.moveDown();
-
-        // ===== Delivery Address =====
-        const addr = payment.orderId.deliveryAddress;
-        if (addr) {
-            doc
-                .fillColor("#1E90FF")
-                .fontSize(14)
-                .text("Delivery Address", { underline: true });
-            doc.moveDown(0.2);
-            doc
-                .fillColor("#333333")
-                .fontSize(12)
-                .text(`${addr.firstName} ${addr.lastName}`)
-                .text(`${addr.houseNo}, ${addr.landmark}`)
-                .text(`${addr.city} - ${addr.pincode}, ${addr.state}, ${addr.country}`)
-                .text(`Phone: ${addr.phone}`);
-            doc.moveDown();
+        const order = await orderModel.findById(orderId);
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Order not found",
+            });
         }
 
-        // ===== Order Items =====
-        doc
-            .fillColor("#1E90FF")
-            .fontSize(14)
-            .text("Order Items", { underline: true });
-        doc.moveDown(0.3);
+        order.paymentStatus = orderPaymentStatus;
+        order.orderStatus = orderStatus;
+        order.status = orderStatus;
+        await order.save();
 
-        payment.orderId.items.forEach((item, index) => {
-            const product = item.productId;
-            const seller = item.sellerId;
-            const pack = item.packSizeId;
-            doc.text(`${index + 1}. ${product.productName} - ₹${product.price} x ${item.quantity}`);
-            doc.text(`   Seller: ${seller.storeName} (${seller.businessName})`);
-            doc.text(`   Pack: ${pack?.unit || "N/A"}`);
-            doc.moveDown(0.5);
+        return res.status(200).json({
+            success: true,
+            message: "Payment verified and order updated successfully",
+            result: {
+                paymentStatus,
+                transactionId,
+                stripeStatus,
+                orderStatus,
+                orderId: order._id,
+                clientSecret,
+            },
         });
-
-        // ===== Total Amount =====
-        doc
-            .moveDown()
-            .fontSize(14)
-            .fillColor("#228B22") // green for total
-            .text(`Total Amount: ₹${payment.amount}`, { align: "right", bold: true });
-
-        // ===== Footer =====
-        doc
-            .moveDown(2)
-            .fontSize(10)
-            .fillColor("#888888")
-            .text("Thank you for shopping with FastCart!", { align: "center" });
-
-        doc.end();
-
-    } catch (error) {
+    } catch (err) {
         return res.status(500).json({
             success: false,
-            message: "Server error",
-            error: error.message
+            message: "Payment verification failed",
+            error: err.message,
         });
     }
 };
 
-export const paymentStatusChangeController = async (req, res) => {
+export const getAllPaymentHistory = async (req, res) => {
     try {
+        const payments = await paymentModel.find({}).populate("orderId").populate("userId");
+        return sendSuccessResponse(res, "All payment get successfully", payments);
+    } catch (error) {
+        return sendErrorResponse(res, 500, "Error while Get all payment History", error);
+    }
+};
+
+export const updateRefundStatusController = async (req, res) => {
+    try {
+        const sellerId = req?.user?.id;
         const { paymentId } = req.params;
-        const { paymentStatus } = req.body;
+        const { refundStatus } = req.body;
 
-        // Validate paymentId
-        if (!paymentId || !mongoose.Types.ObjectId.isValid(paymentId)) {
-            return res.status(400).json({ success: false, message: "Valid payment ID is required" });
-        }
-
-        // Validate paymentStatus
-        const allowedStatuses = ["pending", "completed", "failed", "refunded"];
-        if (!paymentStatus || !allowedStatuses.includes(paymentStatus)) {
+        const allowedRefundStatuses = ["refund initiated", "under progress", "delivered"];
+        if (!refundStatus || !allowedRefundStatuses.includes(refundStatus)) {
             return res.status(400).json({
                 success: false,
-                message: `Payment status must be one of: ${allowedStatuses.join(", ")}`
+                message: "Invalid refund status. Allowed: " + allowedRefundStatuses.join(", ")
             });
         }
 
-        // Find and update payment
         const payment = await paymentModel.findById(paymentId);
         if (!payment) {
-            return res.status(404).json({ success: false, message: "Payment not found" });
+            return res.status(404).json({ success: false, message: "Payment record not found." });
         }
 
-        payment.paymentStatus = paymentStatus;
+        const order = await orderModel.findById(payment.orderId);
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found." });
+        }
+
+        // Verify seller has items in this order
+        const hasSellerItem = order.items.some(item => item.sellerId.toString() === sellerId.toString());
+        if (!hasSellerItem) {
+            return res.status(403).json({ success: false, message: "You are not authorized to update this refund." });
+        }
+
+        payment.refundStatus = refundStatus;
+        if (!payment.refundTimeline) {
+            payment.refundTimeline = {};
+        }
+        if (refundStatus === "refund initiated") {
+            payment.refundTimeline.initiatedAt = new Date();
+        } else if (refundStatus === "under progress") {
+            payment.refundTimeline.processingAt = new Date();
+        } else if (refundStatus === "delivered") {
+            payment.refundTimeline.deliveredAt = new Date();
+        }
+
+        if (refundStatus === "delivered") {
+            payment.paymentStatus = "refunded";
+            order.paymentStatus = "refunded";
+        }
         await payment.save();
+
+        order.refundStatus = refundStatus;
+        if (!order.refundTimeline) {
+            order.refundTimeline = {};
+        }
+        if (refundStatus === "refund initiated") {
+            order.refundTimeline.initiatedAt = new Date();
+        } else if (refundStatus === "under progress") {
+            order.refundTimeline.processingAt = new Date();
+        } else if (refundStatus === "delivered") {
+            order.refundTimeline.deliveredAt = new Date();
+        }
+        await order.save();
 
         return res.status(200).json({
             success: true,
-            message: `Payment status updated to ${paymentStatus}`,
-            payment
+            message: `Refund status updated to ${refundStatus}`,
+            payment,
+            order
         });
-
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Server error",
-            error: error.message
-        });
+        console.error("Update Refund Status Error:", error);
+        return res.status(500).json({ success: false, message: "Server error", error: error.message });
     }
 };

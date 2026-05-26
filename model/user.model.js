@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-
 export const UserAddressSchema = new mongoose.Schema({
     firstName: { type: String, trim: true, default: null },
     lastName: { type: String, trim: true, default: null },
@@ -28,7 +27,6 @@ export const UserAddressSchema = new mongoose.Schema({
         default: "Home"
     }
 });
-
 
 const UserSchema = new mongoose.Schema({
     name: {
@@ -64,13 +62,13 @@ const UserSchema = new mongoose.Schema({
         ref: "user.address",
         default: null
     },
+
     uid: { type: String, default: null },
     avatar: { type: String, default: null },
     otp: { type: Number, default: null },
     resetOtpExpiry: { type: Date, default: null },
     verified: { type: Boolean, default: false }
-}, { timestamps: true }); // adds createdAt & updatedAt automatically
-
+}, { timestamps: true });
 
 const UserModel = mongoose.model("user", UserSchema);
 

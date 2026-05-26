@@ -28,6 +28,10 @@ const CartSchema = new mongoose.Schema(
             unique: true,
         },
         items: [CartItemSchema],
+        appliedCoupon: {
+            type: Object,
+            default: null
+        }
     },
     { timestamps: true }
 );

@@ -1,8 +1,9 @@
 import mongoose from "mongoose";
 import CouponModel from "../model/coupon.model.js";
 import { ThrowError } from "../utils/Error.utils.js";
-import { sendBadRequestResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/Response.utils.js";
+import { sendBadRequestResponse, sendNotFoundResponse, sendSuccessResponse, sendErrorResponse } from "../utils/Response.utils.js";
 import OrderModel from "../model/order.model.js";
+import cartModel from "../model/cart.model.js";
 
 
 export const createCoupon = async (req, res) => {
@@ -141,34 +142,58 @@ export const deleteCoupon = async (req, res) => {
 
 export const applyCouponController = async (req, res) => {
     try {
-        const { code, orderId } = req.body;
+        const { code } = req.body;
+        const { id: userId } = req.user;
 
-        if (!code || !orderId)
-            return sendBadRequestResponse(res, "Coupon code and orderId are required");
+        if (!code) {
+            return sendBadRequestResponse(res, "Coupon code is required");
+        }
 
-        const order = await OrderModel.findById(orderId).populate("items.productId");
-        if (!order) return sendNotFoundResponse(res, "Order not found");
+        const cart = await cartModel.findOne({ userId }).populate("items.productId");
+        if (!cart) {
+            return sendNotFoundResponse(res, "Cart not found");
+        }
+
+        if (cart.items.length === 0) {
+            return sendBadRequestResponse(res, "Cart is empty. Add products to apply coupon.");
+        }
 
         const coupon = await CouponModel.findOne({ code: code.toUpperCase(), isActive: true });
-        if (!coupon) return sendNotFoundResponse(res, "Invalid or inactive coupon");
+        if (!coupon) {
+            return sendNotFoundResponse(res, "Invalid or inactive coupon");
+        }
 
-        if (coupon.expiryDate < new Date())
+        if (coupon.expiryDate < new Date()) {
             return sendBadRequestResponse(res, "Coupon has expired");
+        }
 
-        // ✅ Calculate only for items belonging to this seller
+        let cartTotal = 0;
         let eligibleAmount = 0;
-        order.items.forEach(item => {
-            if (item.sellerId.toString() === coupon.sellerId.toString()) {
-                eligibleAmount += (item.productId.price || 0) * item.quantity;
+
+        cart.items.forEach(item => {
+            const product = item.productId;
+            if (!product) return;
+
+            const selectedPack = product.packSizes?.find(
+                p => p._id.toString() === item.packSizeId.toString()
+            );
+            if (selectedPack) {
+                const itemPrice = selectedPack.price;
+                const itemTotal = itemPrice * item.quantity;
+                cartTotal += itemTotal;
+
+                if (!coupon.sellerId || (product.sellerId && product.sellerId.toString() === coupon.sellerId.toString())) {
+                    eligibleAmount += itemTotal;
+                }
             }
         });
 
         if (eligibleAmount === 0) {
-            return sendBadRequestResponse(res, "Coupon not applicable: no items from this seller in order");
+            return sendBadRequestResponse(res, "Coupon not applicable: no eligible products from this seller in cart");
         }
 
         if (eligibleAmount < coupon.minOrderValue) {
-            return sendBadRequestResponse(res, `Minimum order value for this coupon: ₹${coupon.minOrderValue}`);
+            return sendBadRequestResponse(res, `Minimum order value for this coupon is $${coupon.minOrderValue}`);
         }
 
         let discount = 0;
@@ -181,24 +206,75 @@ export const applyCouponController = async (req, res) => {
             discount = coupon.discountValue;
         }
 
-        if (discount > eligibleAmount) discount = eligibleAmount;
+        if (discount > eligibleAmount) {
+            discount = eligibleAmount;
+        }
 
-        // ✅ Final amount = totalAmount - discount (only applied to eligible seller part)
-        order.appliedCoupon = coupon.code;
-        order.discount = discount;
-        order.finalAmount = order.totalAmount - discount;
+        const finalAmount = cartTotal - discount;
 
-        await order.save();
+        cart.appliedCoupon = {
+            code: coupon.code,
+            couponId: coupon._id,
+            discount: discount,
+            discountType: coupon.discountType,
+            discountValue: coupon.discountValue,
+            eligibleAmount: eligibleAmount,
+            cartTotal: cartTotal,
+            finalAmount: finalAmount
+        };
+
+        await cart.save();
 
         return sendSuccessResponse(res, "Coupon applied successfully", {
-            orderId: order._id,
-            sellerId: coupon.sellerId,
-            couponCode: coupon.code,
-            eligibleAmount,
+            cartId: cart._id,
+            items: cart.items,
+            appliedCoupon: cart.appliedCoupon,
+            originalAmount: cartTotal,
             discount,
-            finalAmount: order.finalAmount
+            finalAmount
         });
     } catch (error) {
-        return ThrowError(res, 500, error.message);
+        console.error("applyCouponController error:", error);
+        return sendErrorResponse(res, 500, "Error applying coupon", error.message);
+    }
+};
+
+export const removeCouponController = async (req, res) => {
+    try {
+        const { id: userId } = req.user;
+
+        const cart = await cartModel.findOne({ userId }).populate("items.productId");
+        if (!cart) {
+            return sendNotFoundResponse(res, "Cart not found");
+        }
+
+        const removedCoupon = cart.appliedCoupon;
+        cart.appliedCoupon = undefined;
+        await cart.save();
+
+        let cartTotal = 0;
+        cart.items.forEach(item => {
+            const product = item.productId;
+            if (!product) return;
+
+            const selectedPack = product.packSizes?.find(
+                p => p._id.toString() === item.packSizeId.toString()
+            );
+            if (selectedPack) {
+                cartTotal += selectedPack.price * item.quantity;
+            }
+        });
+
+        return sendSuccessResponse(res, "Coupon removed successfully", {
+            cartId: cart._id,
+            items: cart.items,
+            originalAmount: cartTotal,
+            finalAmount: cartTotal,
+            discount: 0,
+            removedCoupon
+        });
+    } catch (error) {
+        console.error("removeCouponController error:", error);
+        return sendErrorResponse(res, 500, "Error removing coupon", error.message);
     }
 };

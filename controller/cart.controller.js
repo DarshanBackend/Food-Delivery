@@ -35,6 +35,7 @@ export const addToCartController = async (req, res) => {
         // === Cart check ===
         let cart = await cartModel.findOne({ userId: userId });
         if (!cart) cart = new cartModel({ userId, items: [] });
+        cart.appliedCoupon = undefined;
 
         // === Existing item check ===
         const existingItem = cart.items.find((item) => {
@@ -182,6 +183,7 @@ export const updateCartItemController = async (req, res) => {
 
         // === Update only quantity ===
         item.quantity = quantity;
+        cart.appliedCoupon = undefined;
 
         await cart.save();
         await cart.populate("items.productId", "productName packSizes");
@@ -219,20 +221,89 @@ export const deleteCartItemController = async (req, res) => {
             return sendErrorResponse(res, 400, "Invalid Cart Item ID");
         }
 
-        // Remove the item from the user's cart
-        const updatedCart = await cartModel.findOneAndUpdate(
-            { userId },
-            { $pull: { items: { _id: cartItemId } } },
-            { new: true }
-        );
-
-        if (!updatedCart) {
-            return sendErrorResponse(res, 404, "Cart or item not found");
+        const cart = await cartModel.findOne({ userId });
+        if (!cart) {
+            return sendErrorResponse(res, 404, "Cart not found");
         }
 
-        return sendSuccessResponse(res, "Cart item deleted successfully", updatedCart);
+        const itemIndex = cart.items.findIndex(item => item._id.toString() === cartItemId);
+        if (itemIndex === -1) {
+            return sendErrorResponse(res, 404, "Item not found in cart");
+        }
+
+        cart.items.splice(itemIndex, 1);
+        cart.appliedCoupon = undefined;
+
+        await cart.save();
+
+        return sendSuccessResponse(res, "Cart item deleted successfully", cart);
     } catch (error) {
         console.log("Error while deleting cart item: " + error.message);
         return sendErrorResponse(res, 500, "Error while deleting cart item");
+    }
+};
+
+// Billing Summary Controller
+export const billingSummaryController = async (req, res) => {
+    try {
+        const { id: userId } = req.user;
+
+        const cart = await cartModel.findOne({ userId }).populate("items.productId");
+        if (!cart || cart.items.length === 0) {
+            return sendSuccessResponse(res, "Cart is empty. Returning zero billing summary.", {
+                itemsCount: 0,
+                subtotal: 0,
+                discount: 0,
+                platformFee: 0,
+                deliveryCharges: 0,
+                deliveryChargesOriginal: 0,
+                isDeliveryFree: false,
+                total: 0,
+                appliedCoupon: null
+            });
+        }
+
+        let subtotal = 0;
+        let itemsCount = 0;
+
+        cart.items.forEach(item => {
+            const product = item.productId;
+            if (!product) return;
+
+            const selectedPack = product.packSizes?.find(
+                p => p._id.toString() === item.packSizeId.toString()
+            );
+            if (selectedPack) {
+                subtotal += selectedPack.price * item.quantity;
+                itemsCount += item.quantity;
+            }
+        });
+
+        let discount = 0;
+        if (cart.appliedCoupon) {
+            discount = cart.appliedCoupon.discount || 0;
+        }
+
+        const platformFee = 1;
+        const deliveryChargesOriginal = 20;
+        const deliveryCharges = 20;
+        const isDeliveryFree = false;
+
+        const total = subtotal - discount + platformFee + deliveryCharges;
+
+        return sendSuccessResponse(res, "Billing summary fetched successfully", {
+            itemsCount,
+            subtotal,
+            discount,
+            platformFee,
+            deliveryCharges,
+            deliveryChargesOriginal,
+            isDeliveryFree,
+            total,
+            appliedCoupon: cart.appliedCoupon || null
+        });
+    } catch (error) {
+        console.error("billingSummaryController error:", error);
+        return sendErrorResponse(res, 500, "Error fetching billing summary", error.message);
     }
 };

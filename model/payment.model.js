@@ -20,15 +20,15 @@ const paymentSchema = new mongoose.Schema({
     },
     paymentMethod: {
         type: String,
-        enum: ["credit_card", "debit_card", "paypal", "bank_transfer", "cash_on_delivery"],
+        enum: ["credit_card", "cash_on_delivery", "upi"],
         required: true,
         default: "cash_on_delivery",
     },
     paymentStatus: {
         type: String,
-        enum: ["pending", "completed", "failed", "refunded"],
+        enum: ["pending", "completed", "failed", "refunded", "Paid", "Pending", "Processing"],
         required: true,
-        default: "pending",
+        default: "Pending",
         index: true,
     },
     transactionId: {
@@ -48,16 +48,24 @@ const paymentSchema = new mongoose.Schema({
         expiryYear: Number,
         billingAddress: String,
     },
-    paypalDetails: {
-        paypalId: String,
-        email: String,
+    stripePaymentIntentId: {
+        type: String,
+        default: null,
     },
-    bankTransferDetails: {
-        bankName: String,
-        accountNumber: String,
-        routingNumber: String,
-        transactionReference: String,
+    clientSecret: {
+        type: String,
+        default: null,
     },
+    refundStatus: {
+        type: String,
+        enum: ["refund initiated", "under progress", "delivered"],
+        default: null,
+    },
+    refundTimeline: {
+        initiatedAt: { type: Date, default: null },
+        processingAt: { type: Date, default: null },
+        deliveredAt: { type: Date, default: null }
+    }
 }, { timestamps: true });
 
 const paymentModel = mongoose.model("Payment", paymentSchema);

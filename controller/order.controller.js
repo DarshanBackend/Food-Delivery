@@ -4,6 +4,9 @@ import UserModel from "../model/user.model.js";
 import orderModel from "../model/order.model.js";
 import productModel from "../model/product.model.js";
 import cartModel from "../model/cart.model.js";
+import CouponModel from "../model/coupon.model.js";
+import paymentModel from "../model/payment.model.js";
+import couponModel from "../model/coupon.model.js";
 
 
 //select address for delivery
@@ -95,16 +98,21 @@ export const newOrderController = async (req, res) => {
             return sendNotFoundResponse(res, "Selected address not found in user addresses");
         }
 
-        // 4. Enrich items with sellerId and calculate totalAmount
-        let totalAmount = 0;
+        // 4. Enrich items with sellerId and calculate subtotal based on pack sizes
+        let subtotal = 0;
         const itemsWithSeller = await Promise.all(
             items.map(async (item) => {
-                const product = await productModel.findById(item.productId).select("sellerId price");
+                const product = await productModel.findById(item.productId).select("sellerId price packSizes");
                 if (!product) {
                     throw new Error(`Product not found for productId: ${item.productId}`);
                 }
 
-                totalAmount += product.price * item.quantity;
+                const selectedPack = product.packSizes?.find(
+                    (p) => p._id.toString() === item.packSizeId.toString()
+                );
+                const effectivePrice = selectedPack ? selectedPack.price : product.price || 0;
+
+                subtotal += effectivePrice * item.quantity;
 
                 return {
                     ...item,
@@ -113,28 +121,150 @@ export const newOrderController = async (req, res) => {
             })
         );
 
+        const deliveryCharges = 20;
+
+        // Calculate coupon discount if applied
+        let discount = 0;
+        if (appliedCoupon) {
+            const coupon = await CouponModel.findOne({ code: appliedCoupon.toUpperCase(), isActive: true });
+            if (coupon && coupon.expiryDate >= new Date()) {
+                let eligibleAmount = 0;
+                for (const item of items) {
+                    const product = await productModel.findById(item.productId);
+                    if (product) {
+                        const selectedPack = product.packSizes?.find(
+                            p => p._id.toString() === item.packSizeId.toString()
+                        );
+                        const price = selectedPack ? selectedPack.price : product.price || 0;
+                        const itemTotal = price * item.quantity;
+
+                        if (!coupon.sellerId || (product.sellerId && product.sellerId.toString() === coupon.sellerId.toString())) {
+                            eligibleAmount += itemTotal;
+                        }
+                    }
+                }
+
+                if (eligibleAmount >= coupon.minOrderValue) {
+                    if (coupon.discountType === "percentage") {
+                        discount = (eligibleAmount * coupon.discountValue) / 100;
+                        if (coupon.maxDiscount && discount > coupon.maxDiscount) {
+                            discount = coupon.maxDiscount;
+                        }
+                    } else if (coupon.discountType === "flat") {
+                        discount = coupon.discountValue;
+                    }
+                    if (discount > eligibleAmount) {
+                        discount = eligibleAmount;
+                    }
+                }
+            }
+        }
+
         // 5. Check for existing pending order
         let order = await orderModel.findOne({ userId, "items.status": { $ne: "delivered" } });
 
         if (order) {
             // Append items to existing order
             order.items.push(...itemsWithSeller);
-            order.totalAmount += totalAmount;
-            order.finalAmount = order.totalAmount - (order.discount || 0);
-            if (appliedCoupon) order.appliedCoupon = appliedCoupon;
+
+            // Recalculate subtotal of all items in the order
+            let newSubtotal = 0;
+            for (const item of order.items) {
+                const product = await productModel.findById(item.productId);
+                if (product) {
+                    const selectedPack = product.packSizes?.find(
+                        p => p._id.toString() === item.packSizeId.toString()
+                    );
+                    const price = selectedPack ? selectedPack.price : product.price || 0;
+                    newSubtotal += price * item.quantity;
+                }
+            }
+
+            // Recalculate coupon discount for the order
+            let newDiscount = 0;
+            const activeCouponCode = appliedCoupon || order.appliedCoupon;
+            if (activeCouponCode) {
+                const coupon = await CouponModel.findOne({ code: activeCouponCode.toUpperCase(), isActive: true });
+                if (coupon && coupon.expiryDate >= new Date()) {
+                    let eligibleAmount = 0;
+                    for (const item of order.items) {
+                        const product = await productModel.findById(item.productId);
+                        if (product) {
+                            const selectedPack = product.packSizes?.find(
+                                p => p._id.toString() === item.packSizeId.toString()
+                            );
+                            const price = selectedPack ? selectedPack.price : product.price || 0;
+                            const itemTotal = price * item.quantity;
+
+                            if (!coupon.sellerId || (product.sellerId && product.sellerId.toString() === coupon.sellerId.toString())) {
+                                eligibleAmount += itemTotal;
+                            }
+                        }
+                    }
+
+                    if (eligibleAmount >= coupon.minOrderValue) {
+                        if (coupon.discountType === "percentage") {
+                            newDiscount = (eligibleAmount * coupon.discountValue) / 100;
+                            if (coupon.maxDiscount && newDiscount > coupon.maxDiscount) {
+                                newDiscount = coupon.maxDiscount;
+                            }
+                        } else if (coupon.discountType === "flat") {
+                            newDiscount = coupon.discountValue;
+                        }
+                        if (newDiscount > eligibleAmount) {
+                            newDiscount = eligibleAmount;
+                        }
+                        order.appliedCoupon = activeCouponCode.toUpperCase();
+                    }
+                }
+            }
+
+            order.discount = newDiscount;
+            order.totalAmount = newSubtotal + platformFee + deliveryCharges;
+            order.finalAmount = newSubtotal - newDiscount + platformFee + deliveryCharges;
+            if (!order.statusTimeline) order.statusTimeline = {};
+            if (!order.statusTimeline.confirmedAt) order.statusTimeline.confirmedAt = new Date();
+
             await order.save();
 
             return sendSuccessResponse(res, "Order updated successfully (items appended)", order);
         } else {
+            // Create unique custom orderId (format: ABC - 123456)
+            let uniqueOrderId;
+            let exists = true;
+            while (exists) {
+                const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                let randomLetters = "";
+                for (let i = 0; i < 3; i++) {
+                    randomLetters += letters.charAt(Math.floor(Math.random() * letters.length));
+                }
+                const digits = "0123456789";
+                let randomDigits = "";
+                for (let i = 0; i < 6; i++) {
+                    randomDigits += digits.charAt(Math.floor(Math.random() * digits.length));
+                }
+                uniqueOrderId = `${randomLetters} - ${randomDigits}`;
+                
+                const existingOrder = await orderModel.findOne({ orderId: uniqueOrderId });
+                if (!existingOrder) {
+                    exists = false;
+                }
+            }
+
             // Create new order
             const newOrder = new orderModel({
+                orderId: uniqueOrderId,
                 userId,
                 items: itemsWithSeller,
                 deliveryAddress: selectedAddress,
                 platformFee: platformFee,
-                totalAmount: totalAmount + platformFee,
-                finalAmount: totalAmount + platformFee,
-                appliedCoupon: appliedCoupon || null
+                totalAmount: subtotal + platformFee + deliveryCharges,
+                discount: discount,
+                finalAmount: subtotal - discount + platformFee + deliveryCharges,
+                appliedCoupon: appliedCoupon ? appliedCoupon.toUpperCase() : null,
+                statusTimeline: {
+                    confirmedAt: new Date()
+                }
             });
 
             await newOrder.save();
@@ -163,7 +293,7 @@ export const myOrderController = async (req, res) => {
             })
             .populate({
                 path: "items.productId",
-                select: "productName images price",
+                select: "productName images price packSizes",
                 populate: {
                     path: "sellerId",
                     select: "businessName storeName email mobileNo pickUpAddr"
@@ -178,24 +308,33 @@ export const myOrderController = async (req, res) => {
             return sendNotFoundResponse(res, "No orders found");
         }
 
-        // Calculate totalAmount per order
-        const ordersWithTotals = myOrders.map(order => {
-            let totalAmount = 0;
-
-            order.items.forEach(item => {
-                const price = item.productId?.price || 0;
-                totalAmount += price * item.quantity;
+        const formattedOrders = myOrders.map(order => {
+            const orderObj = order.toObject();
+            orderObj.items = orderObj.items.map(item => {
+                if (item.productId && item.productId.packSizes) {
+                    const matchedPack = item.productId.packSizes.find(
+                        p => p._id.toString() === item.packSizeId.toString()
+                    );
+                    if (matchedPack) {
+                        item.selectedPackSize = {
+                            weight: matchedPack.weight,
+                            unit: matchedPack.unit,
+                            price: matchedPack.price
+                        };
+                    } else {
+                        item.selectedPackSize = null;
+                    }
+                } else {
+                    item.selectedPackSize = null;
+                }
+                return item;
             });
-
-            return {
-                ...order.toObject(),
-                totalAmount
-            };
+            return orderObj;
         });
 
         return sendSuccessResponse(res, "My orders fetched successfully", {
-            total: ordersWithTotals.length,
-            orders: ordersWithTotals,
+            total: formattedOrders.length,
+            orders: formattedOrders,
         });
     } catch (error) {
         console.error("Error fetching orders:", error);
@@ -367,7 +506,7 @@ export const deleteMyOrderController = async (req, res) => {
 export const cancelMyOrderController = async (req, res) => {
     try {
         const userId = req?.user?.id;
-        const { orderId, itemId } = req.params; // orderId for full order, itemId for single item
+        const { orderId } = req.params;
         const { reasonForCancel, comment } = req.body;
 
         // 1. Validate userId
@@ -380,58 +519,49 @@ export const cancelMyOrderController = async (req, res) => {
             return sendBadRequestResponse(res, "Reason for cancellation is required");
         }
 
+        if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+            return sendBadRequestResponse(res, "Invalid or missing orderId");
+        }
+
         let order;
         let totalAmount = 0;
 
-        if (itemId) {
-            // Cancel single item
-            if (!mongoose.Types.ObjectId.isValid(itemId)) {
-                return sendBadRequestResponse(res, "Invalid or missing itemId");
-            }
+        // Find the order by orderId
+        order = await orderModel.findOne({ _id: orderId, userId }).populate("items.productId");
 
-            order = await orderModel.findOne({ userId, "items._id": itemId }).populate("items.productId");
-            if (!order) return sendNotFoundResponse(res, "Order containing this item not found");
-
-            const item = order.items.id(itemId);
-            if (!item) return sendNotFoundResponse(res, "Item not found in order");
-
-            if (item.status === "cancelled") return sendBadRequestResponse(res, "Item is already cancelled");
-            if (item.status === "delivered") return sendBadRequestResponse(res, "Cannot cancel a delivered item");
-
-            // Cancel the item
-            item.status = "cancelled";
-            item.reasonForCancel = reasonForCancel;
-            item.comment = comment || null;
-
-        } else {
-            // Cancel entire order
-            if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
-                return sendBadRequestResponse(res, "Invalid or missing orderId");
-            }
-
-            order = await orderModel.findOne({ _id: orderId, userId }).populate("items.productId");
-            if (!order) return sendNotFoundResponse(res, "Order not found");
-
-            if (order.status === "cancelled") return sendBadRequestResponse(res, "Order is already cancelled");
-
-            // Cancel all items
-            order.items.forEach(item => {
-                if (item.status !== "delivered") {
-                    item.status = "cancelled";
-                    item.reasonForCancel = reasonForCancel;
-                    item.comment = comment || null;
-                }
-            });
-
-            order.status = "cancelled";
-            order.reasonForCancel = reasonForCancel;
-            order.comment = comment || null;
+        if (!order) {
+            return sendNotFoundResponse(res, "Order not found");
         }
+
+        // Check if the order is already cancelled
+        if (order.status === "cancelled" || order.orderStatus === "cancelled") {
+            return sendBadRequestResponse(res, "Order is already cancelled");
+        }
+
+        // Check if all items are already delivered
+        const allDelivered = order.items.every(item => item.status === "delivered");
+        if (allDelivered) {
+            return sendBadRequestResponse(res, "Cannot cancel this order as all items are already delivered");
+        }
+
+        // Cancel all non-delivered items
+        order.items.forEach(item => {
+            if (item.status !== "delivered" && item.status !== "cancelled") {
+                item.status = "cancelled";
+                item.reasonForCancel = reasonForCancel;
+                item.comment = comment || null;
+            }
+        });
+
+        order.status = "cancelled";
+        order.orderStatus = "cancelled";
+        order.reasonForCancel = reasonForCancel;
+        order.comment = comment || null;
 
         // 3. Recalculate totalAmount excluding cancelled items
         order.items.forEach(item => {
             if (item.status !== "cancelled") {
-                totalAmount += item.productId?.price || 0 * item.quantity;
+                totalAmount += (item.productId?.price || 0) * item.quantity;
             }
         });
         order.totalAmount = totalAmount;
@@ -462,9 +592,34 @@ export const cancelMyOrderController = async (req, res) => {
             order.finalAmount = totalAmount;
         }
 
+        // Check payment method for refund
+        const payment = await paymentModel.findOne({ orderId: order._id });
+        if (payment) {
+            if (payment.paymentMethod === "credit_card" || payment.paymentMethod === "upi") {
+                payment.refundStatus = "refund initiated";
+                order.refundStatus = "refund initiated";
+
+                payment.refundTimeline = {
+                    initiatedAt: new Date(),
+                    processingAt: null,
+                    deliveredAt: null
+                };
+                order.refundTimeline = {
+                    initiatedAt: new Date(),
+                    processingAt: null,
+                    deliveredAt: null
+                };
+
+                await payment.save();
+            }
+        }
+
+        if (!order.statusTimeline) order.statusTimeline = {};
+        order.statusTimeline.cancelledAt = new Date();
+
         await order.save();
 
-        return sendSuccessResponse(res, itemId ? "Order item cancelled successfully" : "Order cancelled successfully", order);
+        return sendSuccessResponse(res, "Order cancelled successfully", order);
 
     } catch (error) {
         console.error("Error cancelling order:", error);
@@ -495,53 +650,31 @@ export const sellerChangeOrderStatusController = async (req, res) => {
 
         let order;
 
-        // 3️⃣ Update single item
-        if (itemId) {
-            if (!mongoose.Types.ObjectId.isValid(itemId)) {
-                return res.status(400).json({ success: false, message: "The item you are trying to update is invalid." });
-            }
-
-            order = await orderModel.findOne({
-                items: { $elemMatch: { _id: itemId, sellerId: sellerId } }
-            }).populate("items.productId");
-
-            if (!order) return res.status(404).json({ success: false, message: "Sorry, we couldn’t find this item in your orders." });
-
-            const item = order.items.id(itemId);
-
-            // Prevent invalid changes
-            if (item.status === "cancelled" && status !== "cancelled") {
-                return res.status(400).json({ success: false, message: "This item was cancelled and its status cannot be changed." });
-            }
-            if (item.status === "delivered" && status !== "delivered") {
-                return res.status(400).json({ success: false, message: "This item is already delivered and cannot be updated." });
-            }
-
-            item.status = status;
-
-        } else {
-            // 4️⃣ Update all items for this seller
-            if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
-                return res.status(400).json({ success: false, message: "Order ID is invalid." });
-            }
-
-            order = await orderModel.findOne({
-                _id: orderId,
-                items: { $elemMatch: { sellerId: sellerId } }
-            }).populate("items.productId");
-
-            if (!order) return res.status(404).json({ success: false, message: "We couldn’t find any order matching your selection." });
-
-            order.items.forEach(item => {
-                if (item.sellerId.toString() === sellerId) {
-                    if (item.status !== "delivered" && item.status !== "cancelled") {
-                        item.status = status;
-                    }
-                }
-            });
+        // 3️⃣ Find the order by orderId or itemId
+        if (orderId && mongoose.Types.ObjectId.isValid(orderId)) {
+            order = await orderModel.findById(orderId).populate("items.productId");
+        } else if (itemId && mongoose.Types.ObjectId.isValid(itemId)) {
+            order = await orderModel.findOne({ "items._id": itemId }).populate("items.productId");
         }
 
-        // 5️⃣ Recalculate totalAmount excluding cancelled items
+        if (!order) {
+            return res.status(404).json({ success: false, message: "We couldn’t find any order matching your selection." });
+        }
+
+        // 4️⃣ Verify that this seller has items in this order
+        const hasSellerItem = order.items.some(item => item.sellerId.toString() === sellerId.toString());
+        if (!hasSellerItem) {
+            return res.status(403).json({ success: false, message: "You are not authorized to update this order." });
+        }
+
+        // 5️⃣ Update status of all non-cancelled items in the order
+        order.items.forEach(item => {
+            if (item.status !== "cancelled") {
+                item.status = status;
+            }
+        });
+
+        // 6️⃣ Recalculate totalAmount and finalAmount
         let totalAmount = 0;
         order.items.forEach(i => {
             if (i.status !== "cancelled") {
@@ -550,7 +683,6 @@ export const sellerChangeOrderStatusController = async (req, res) => {
         });
         order.totalAmount = totalAmount;
 
-        // 6️⃣ Recalculate finalAmount with coupon if applied
         if (order.appliedCoupon) {
             const coupon = await couponModel.findOne({ code: order.appliedCoupon, isActive: true });
             let discount = 0;
@@ -579,17 +711,58 @@ export const sellerChangeOrderStatusController = async (req, res) => {
         const itemStatuses = order.items.map(i => i.status);
         if (itemStatuses.every(s => s === "delivered")) {
             order.orderStatus = "completed";
+            order.status = "completed";
         } else if (itemStatuses.every(s => s === "cancelled")) {
             order.orderStatus = "cancelled";
+            order.status = "cancelled";
+        } else if (itemStatuses.every(s => s === "pending")) {
+            order.orderStatus = "Pending";
+            order.status = "Pending";
         } else {
             order.orderStatus = "processing";
+            order.status = "processing";
+        }
+
+        // 8️⃣ Handle payment status changes order-wise
+        if (status === "delivered") {
+            order.paymentStatus = "Paid";
+            const payment = await paymentModel.findOne({ orderId: order._id });
+            if (payment) {
+                payment.paymentStatus = "Paid";
+                payment.paymentDate = new Date();
+                await payment.save();
+            }
+        } else {
+            // For COD, if not all items are delivered yet, ensure the payment status remains "Pending"
+            const payment = await paymentModel.findOne({ orderId: order._id });
+            if (payment && payment.paymentMethod === "cash_on_delivery" && payment.paymentStatus !== "Paid") {
+                order.paymentStatus = "Pending";
+                payment.paymentStatus = "Pending";
+                await payment.save();
+            }
+        }
+
+        // Update status timeline
+        if (!order.statusTimeline) {
+            order.statusTimeline = {};
+        }
+        if (status === "pending") {
+            order.statusTimeline.confirmedAt = new Date();
+        } else if (status === "packing") {
+            order.statusTimeline.processingAt = new Date();
+        } else if (status === "out for delivery") {
+            order.statusTimeline.shippedAt = new Date();
+        } else if (status === "delivered") {
+            order.statusTimeline.deliveredAt = new Date();
+        } else if (status === "cancelled") {
+            order.statusTimeline.cancelledAt = new Date();
         }
 
         await order.save();
 
         return res.status(200).json({
             success: true,
-            message: itemId ? "Order item status updated successfully." : "Order status updated successfully.",
+            message: "Order status updated successfully.",
             order
         });
 
@@ -603,55 +776,198 @@ export const sellerChangeOrderStatusController = async (req, res) => {
     }
 };
 
-//user status wise filter
-export const userStatusFilterController = async (req, res) => {
+export const getOrderTimelineController = async (req, res) => {
     try {
         const userId = req?.user?.id;
-        const { status } = req.query;
-        const allowedStatus = [
-            "pending",
-            "packing",
-            "out for delivery",
-            "delivered",
-            "cancelled",
-        ];
+        const { orderId } = req.params;
 
         if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-            return sendBadRequestResponse(res, "Invalid userId");
+            return sendBadRequestResponse(res, "Invalid or missing userId");
         }
-        if (!status || !allowedStatus.includes(status)) {
-            return sendBadRequestResponse(
-                res,
-                `Status query parameter is required and must be one of: ${allowedStatus.join(
-                    ", "
-                )}`
-            );
+        if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+            return sendBadRequestResponse(res, "Invalid or missing orderId");
         }
 
-        const orders = await orderModel
-            .find({ userId, status })
-            .populate({ path: "items.sellerId", select: "name email phone" });
+        const order = await orderModel.findOne({ _id: orderId, userId })
+            .populate({
+                path: "items.productId",
+                select: "productName price images productImage packSizes"
+            });
 
-        if (!orders || orders.length === 0) {
-            return sendNotFoundResponse(res, `No orders found with status: ${status}`);
+        if (!order) {
+            return sendNotFoundResponse(res, "Order not found");
         }
 
-        return sendSuccessResponse(
-            res,
-            `Orders with status: ${status} fetched successfully`,
-            {
-                total: orders.length,
-                orders,
+        const formatTimelineEvent = (date) => {
+            if (!date) return null;
+            const d = new Date(date);
+            if (isNaN(d.getTime())) return null;
+
+            const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(d);
+            const formatted = new Intl.DateTimeFormat('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            }).format(d);
+
+            return {
+                raw: date,
+                formatted,
+                dayName
+            };
+        };
+
+        const statusTimeline = {};
+        if (order.statusTimeline) {
+            const st = order.statusTimeline.toObject ? order.statusTimeline.toObject() : order.statusTimeline;
+            statusTimeline.confirmedAt = formatTimelineEvent(st.confirmedAt);
+            statusTimeline.processingAt = formatTimelineEvent(st.processingAt);
+            statusTimeline.shippedAt = formatTimelineEvent(st.shippedAt);
+            statusTimeline.deliveredAt = formatTimelineEvent(st.deliveredAt);
+            statusTimeline.cancelledAt = formatTimelineEvent(st.cancelledAt);
+        } else {
+            statusTimeline.confirmedAt = null;
+            statusTimeline.processingAt = null;
+            statusTimeline.shippedAt = null;
+            statusTimeline.deliveredAt = null;
+            statusTimeline.cancelledAt = null;
+        }
+
+        const refundTimeline = {};
+        if (order.refundTimeline) {
+            const rt = order.refundTimeline.toObject ? order.refundTimeline.toObject() : order.refundTimeline;
+            refundTimeline.initiatedAt = formatTimelineEvent(rt.initiatedAt);
+            refundTimeline.processingAt = formatTimelineEvent(rt.processingAt);
+            refundTimeline.deliveredAt = formatTimelineEvent(rt.deliveredAt);
+        } else {
+            refundTimeline.initiatedAt = null;
+            refundTimeline.processingAt = null;
+            refundTimeline.deliveredAt = null;
+        }
+
+        const orderObj = order.toObject();
+        const formattedItems = orderObj.items.map(item => {
+            if (item.productId && item.productId.packSizes) {
+                const matchedPack = item.productId.packSizes.find(
+                    p => p._id.toString() === item.packSizeId.toString()
+                );
+                if (matchedPack) {
+                    item.selectedPackSize = {
+                        weight: matchedPack.weight,
+                        unit: matchedPack.unit,
+                        price: matchedPack.price
+                    };
+                } else {
+                    item.selectedPackSize = null;
+                }
+            } else {
+                item.selectedPackSize = null;
             }
-        );
+            return item;
+        });
+
+        return sendSuccessResponse(res, "Order timeline retrieved successfully", {
+            orderId: order._id,
+            totalAmount: order.totalAmount,
+            discount: order.discount,
+            finalAmount: order.finalAmount,
+            orderStatus: order.orderStatus || order.status,
+            paymentStatus: order.paymentStatus,
+            refundStatus: order.refundStatus,
+            statusTimeline,
+            refundTimeline,
+            items: formattedItems
+        });
     } catch (error) {
-        console.error("Error filtering orders by status:", error);
-        return sendErrorResponse(
-            res,
-            500,
-            "Error filtering orders by status",
-            error?.message || error
-        );
+        console.error("Error fetching order timeline:", error);
+        return sendErrorResponse(res, 500, "Error fetching order timeline", error.message || error);
     }
 };
 
+export const getUserOrdersByStatusController = async (req, res) => {
+    try {
+        const userId = req?.user?.id;
+        const { status } = req.params;
+
+        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+            return sendBadRequestResponse(res, "Invalid or missing userId");
+        }
+
+        const allowedFilterStatuses = ["delivered", "cancelled", "in_progress"];
+        if (!status || !allowedFilterStatuses.includes(status)) {
+            return sendBadRequestResponse(
+                res,
+                `Status parameter is required and must be one of: ${allowedFilterStatuses.join(", ")}`
+            );
+        }
+
+        let query = { userId };
+
+        if (status === "delivered") {
+            query.$or = [
+                { orderStatus: "completed" },
+                { status: "completed" },
+                { orderStatus: "delivered" },
+                { status: "delivered" }
+            ];
+        } else if (status === "cancelled") {
+            query.$or = [
+                { orderStatus: "cancelled" },
+                { status: "cancelled" }
+            ];
+        } else if (status === "in_progress") {
+            query.$or = [
+                { orderStatus: "Pending" },
+                { status: "Pending" },
+                { orderStatus: "processing" },
+                { status: "processing" }
+            ];
+        }
+
+        const orders = await orderModel.find(query)
+            .populate({
+                path: "items.sellerId",
+                select: "name email phone businessName storeName"
+            })
+            .populate({
+                path: "items.productId",
+                select: "productName price images productImage packSizes"
+            });
+
+        const formattedOrders = orders.map(order => {
+            const orderObj = order.toObject();
+            orderObj.items = orderObj.items.map(item => {
+                if (item.productId && item.productId.packSizes) {
+                    const matchedPack = item.productId.packSizes.find(
+                        p => p._id.toString() === item.packSizeId.toString()
+                    );
+                    if (matchedPack) {
+                        item.selectedPackSize = {
+                            weight: matchedPack.weight,
+                            unit: matchedPack.unit,
+                            price: matchedPack.price
+                        };
+                    } else {
+                        item.selectedPackSize = null;
+                    }
+                } else {
+                    item.selectedPackSize = null;
+                }
+                return item;
+            });
+            return orderObj;
+        });
+
+        return sendSuccessResponse(res, `Orders with status ${status} retrieved successfully`, {
+            total: formattedOrders.length,
+            orders: formattedOrders
+        });
+    } catch (error) {
+        console.error("Error filtering user orders by status:", error);
+        return sendErrorResponse(res, 500, "Error filtering user orders by status", error.message || error);
+    }
+};

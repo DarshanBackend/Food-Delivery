@@ -4,12 +4,12 @@ import { newSellerController, verifySellerMobileOtpController, sellerLoginContro
 import { CategoryController } from '../controller/category.controller.js';
 import { isAdmin, isUser, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/imageupload.js';
-import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
+import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
 import { deleteProductController, filterProductController, getAllProductsController, getGardenFreshProductsController, getPackSizeByIdController, getProductByCategoryController, getProductByCategoryId, getProductDetailController, getSeasonalProductsController, newProductController, searchProductController, updateProductController } from '../controller/product.controller.js';
-import { addToCartController, deleteCartItemController, getMyCartController, updateCartItemController } from '../controller/cart.controller.js';
-import { applyCouponController, createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
-import { downloadInvoiceController, getSellerPaymentsController, makeNewPaymentController, myPaymentController, paymentStatusChangeController } from '../controller/payment.controller.js';
-import { cancelMyOrderController, deleteMyOrderController, myOrderController, newOrderController, selectUserAddressController, sellerChangeOrderStatusController, updateMyOrderController, userStatusFilterController } from '../controller/order.controller.js';
+import { addToCartController, billingSummaryController, deleteCartItemController, getMyCartController, updateCartItemController } from '../controller/cart.controller.js';
+import { applyCouponController, removeCouponController, createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
+import { makeNewPaymentController, confirmStripePaymentController, testConfirmStripePayment, getPaymentStatusController, verifyPayment, getAllPaymentHistory, updateRefundStatusController } from '../controller/payment.controller.js';
+import { cancelMyOrderController, deleteMyOrderController, myOrderController, newOrderController, selectUserAddressController, sellerChangeOrderStatusController, updateMyOrderController, getOrderTimelineController, getUserOrdersByStatusController } from '../controller/order.controller.js';
 import { createOfferController, getAllOffersController, getOfferByIdController, updateOfferController, deleteOfferController } from '../controller/offer.controller.js';
 import { ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { S3Client } from "@aws-sdk/client-s3";
@@ -104,6 +104,7 @@ indexRouter.post("/add/cart/:productId", UserAuth, addToCartController);
 indexRouter.get("/my/cart", UserAuth, getMyCartController)
 indexRouter.patch("/update/cart/:productId", UserAuth, updateCartItemController)
 indexRouter.delete("/delete/item/:cartItemId", UserAuth, deleteCartItemController)
+indexRouter.get("/cart/billing-summary", UserAuth, billingSummaryController)
 
 
 //change password
@@ -125,7 +126,8 @@ indexRouter.get("/getAllCoupon", UserAuth, getAllCoupon);
 indexRouter.get("/getCouponById/:id", UserAuth, getCouponById);
 indexRouter.patch("/seller/updateCoupon/:id", sellerAuth, updateCoupon);
 indexRouter.delete("/seller/deleteCoupon/:id", sellerAuth, deleteCoupon);
-indexRouter.post("/apply-coupon", applyCouponController);
+indexRouter.post("/apply-coupon", UserAuth, applyCouponController);
+indexRouter.post("/remove-coupon", UserAuth, removeCouponController);
 
 
 //order.routes.js
@@ -133,20 +135,22 @@ indexRouter.put("/users/select-address/:addressId", UserAuth, selectUserAddressC
 indexRouter.post("/new/order", UserAuth, newOrderController)
 indexRouter.patch("/update/myorder/:orderId", UserAuth, updateMyOrderController);
 indexRouter.delete("/delete/myorder/:itemId", UserAuth, deleteMyOrderController);
-indexRouter.post("/user/order/cancel/:itemId", UserAuth, cancelMyOrderController);
+indexRouter.post("/user/order/cancel/:orderId", UserAuth, cancelMyOrderController);
 indexRouter.get("/my/order", UserAuth, myOrderController);
-indexRouter.get("/status/filter", UserAuth, userStatusFilterController);
-indexRouter.patch("/seller/order/status/:orderId/:itemId", sellerAuth, sellerChangeOrderStatusController);
-
+indexRouter.get("/user/order/timeline/:orderId", UserAuth, getOrderTimelineController);
+indexRouter.get("/user/orders/filter/:status", UserAuth, getUserOrdersByStatusController);
+indexRouter.patch("/seller/order/status/:orderId", sellerAuth, sellerChangeOrderStatusController);
 
 
 
 // payment.route.js
 indexRouter.post("/new/payment", UserAuth, makeNewPaymentController);
-indexRouter.get("/my/payments", UserAuth, myPaymentController);
-indexRouter.get("/all/payments", sellerAuth, getSellerPaymentsController);
-indexRouter.get("/download/invoice/:paymentId", UserAuth, downloadInvoiceController);
-indexRouter.patch("/payment/status/:paymentId", sellerAuth, paymentStatusChangeController);
+indexRouter.post("/confirm-payment", UserAuth, confirmStripePaymentController);
+indexRouter.post("/test-confirm-payment", UserAuth, testConfirmStripePayment);
+indexRouter.get("/payment-status/:orderId", UserAuth, getPaymentStatusController);
+indexRouter.post("/verify-payment", UserAuth, verifyPayment);
+indexRouter.get("/all-payment-history", UserAuth, isAdmin, getAllPaymentHistory);
+indexRouter.patch("/seller/payment/refund-status/:paymentId", sellerAuth, updateRefundStatusController);
 
 const s3Client = new S3Client({
     region: process.env.S3_REGION,

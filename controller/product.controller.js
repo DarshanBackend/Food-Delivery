@@ -553,57 +553,100 @@ export const searchProductController = async (req, res) => {
 //filter product
 export const filterProductController = async (req, res) => {
     try {
-        const {
-            categories,       // array of category IDs or names
-            priceRange,       // { min, max }
-            discountRange,    // { min, max }
-            sortBy,           // "priceHigh" | "priceLow" | "recent" | "popular"
-            search,           // optional search string
-            inStock,          // true/false
-            page = 1,         // default 1
-            limit = 20        // default 20
-        } = req.body;
+        let {
+            categories,
+            priceRange,
+            discountRange,
+            sortBy,
+            search,
+            inStock,
+            page = 1,
+            limit = 20
+        } = req.query;
 
-        const filter = {};
+        if (req.method === "GET") {
+            if (typeof categories === "string" && categories.trim() !== "") {
+                categories = categories.split(",");
+            }
+            if (typeof priceRange === "string") {
+                const parts = priceRange.split("-");
+                priceRange = { min: Number(parts[0]), max: Number(parts[1]) };
+            } else if (req.query.minPrice !== undefined || req.query.maxPrice !== undefined) {
+                priceRange = {
+                    min: req.query.minPrice !== undefined ? Number(req.query.minPrice) : undefined,
+                    max: req.query.maxPrice !== undefined ? Number(req.query.maxPrice) : undefined
+                };
+            }
+            if (typeof discountRange === "string") {
+                const parts = discountRange.split("-");
+                discountRange = { min: Number(parts[0]), max: Number(parts[1]) };
+            } else if (req.query.minDiscount !== undefined || req.query.maxDiscount !== undefined) {
+                discountRange = {
+                    min: req.query.minDiscount !== undefined ? Number(req.query.minDiscount) : undefined,
+                    max: req.query.maxDiscount !== undefined ? Number(req.query.maxDiscount) : undefined
+                };
+            }
+            if (typeof inStock === "string") {
+                inStock = inStock === "true";
+            }
+            page = Number(page) || 1;
+            limit = Number(limit) || 20;
+        }
 
-        // --- Category filter ---
+        const andConditions = [];
+
         if (categories && categories.length > 0) {
-            // If sending category names instead of IDs
-            const categoryDocs = await CategoryModel.find({ category_name: { $in: categories } }, "_id")
+            const categoryDocs = await CategoryModel.find({
+                $or: [
+                    { category_name: { $in: categories } },
+                    { _id: { $in: categories.filter(id => mongoose.Types.ObjectId.isValid(id)) } }
+                ]
+            }, "_id");
             const categoryIds = categoryDocs.map(c => c._id);
-            filter.category = { $in: categoryIds };
+            andConditions.push({ category: { $in: categoryIds } });
         }
 
-        // --- Price filter ---
         if (priceRange) {
-            filter.$or = [
-                { price: { ...(priceRange.min !== undefined && { $gte: priceRange.min }), ...(priceRange.max !== undefined && { $lte: priceRange.max }) } },
-                { "packSizes.price": { ...(priceRange.min !== undefined && { $gte: priceRange.min }), ...(priceRange.max !== undefined && { $lte: priceRange.max }) } }
-            ];
+            const priceCond = {};
+            if (priceRange.min !== undefined) priceCond.$gte = priceRange.min;
+            if (priceRange.max !== undefined) priceCond.$lte = priceRange.max;
+
+            andConditions.push({
+                $or: [
+                    { price: priceCond },
+                    { "packSizes.price": priceCond }
+                ]
+            });
         }
 
-        // --- Discount filter ---
         if (discountRange) {
-            filter.$or = [
-                { discount: { ...(discountRange.min !== undefined && { $gte: discountRange.min }), ...(discountRange.max !== undefined && { $lte: discountRange.max }) } },
-                { "packSizes.discount": { ...(discountRange.min !== undefined && { $gte: discountRange.min }), ...(discountRange.max !== undefined && { $lte: discountRange.max }) } }
-            ];
+            const discountCond = {};
+            if (discountRange.min !== undefined) discountCond.$gte = discountRange.min;
+            if (discountRange.max !== undefined) discountCond.$lte = discountRange.max;
+
+            andConditions.push({
+                $or: [
+                    { discount: discountCond },
+                    { "packSizes.discount": discountCond }
+                ]
+            });
         }
 
-        // --- Stock filter ---
         if (inStock !== undefined) {
-            filter.inStock = inStock;
+            andConditions.push({ inStock });
         }
 
-        // --- Search filter ---
         if (search) {
-            filter.$or = [
-                { productName: { $regex: search, $options: "i" } },
-                { productDesc: { $regex: search, $options: "i" } }
-            ];
+            andConditions.push({
+                $or: [
+                    { productName: { $regex: search, $options: "i" } },
+                    { productDesc: { $regex: search, $options: "i" } }
+                ]
+            });
         }
 
-        // --- Sorting ---
+        const filter = andConditions.length > 0 ? { $and: andConditions } : {};
+
         let sort = {};
         switch (sortBy) {
             case "priceHigh":
@@ -622,17 +665,14 @@ export const filterProductController = async (req, res) => {
                 sort = { createdAt: -1 };
         }
 
-        // --- Pagination ---
         const skip = (page - 1) * limit;
 
-        // --- Fetch products ---
         const products = await productModel.find(filter)
             .populate("category", "category_name")
             .sort(sort)
             .skip(skip)
             .limit(limit);
 
-        // --- Total count for pagination ---
         const total = await productModel.countDocuments(filter);
 
         return res.status(200).json({
