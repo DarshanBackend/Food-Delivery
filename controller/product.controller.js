@@ -596,14 +596,10 @@ export const filterProductController = async (req, res) => {
         const andConditions = [];
 
         if (categories && categories.length > 0) {
-            const categoryDocs = await CategoryModel.find({
-                $or: [
-                    { category_name: { $in: categories } },
-                    { _id: { $in: categories.filter(id => mongoose.Types.ObjectId.isValid(id)) } }
-                ]
-            }, "_id");
-            const categoryIds = categoryDocs.map(c => c._id);
-            andConditions.push({ category: { $in: categoryIds } });
+            const categoryIds = categories.filter(id => mongoose.Types.ObjectId.isValid(id));
+            if (categoryIds.length > 0) {
+                andConditions.push({ category: { $in: categoryIds } });
+            }
         }
 
         if (priceRange) {
