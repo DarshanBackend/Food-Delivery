@@ -14,11 +14,14 @@ import { cancelMyOrderController, deleteMyOrderController, myOrderController, ne
 import { createOfferController, getAllOffersController, getOfferByIdController, updateOfferController, deleteOfferController } from '../controller/offer.controller.js';
 import { ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { S3Client } from "@aws-sdk/client-s3";
+import { HomeController } from '../controller/home.controller.js';
 
 
 const indexRouter = express.Router();
 
 //base url = domain/api
+
+indexRouter.get("/getHomePageData", HomeController.getHomePageData);
 
 //register
 indexRouter.post("/new/user", AuthController.newUserRegisterController);
