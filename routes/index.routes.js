@@ -4,9 +4,10 @@ import { newSellerController, verifySellerMobileOtpController, sellerLoginContro
 import { CategoryController } from '../controller/category.controller.js';
 import { isAdmin, isUser, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/imageupload.js';
-import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
+import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
 import { deleteProductController, filterProductController, getAllProductsController, getGardenFreshProductsController, getPackSizeByIdController, getProductByCategoryController, getProductByCategoryId, getProductDetailController, getSeasonalProductsController, newProductController, searchProductController, updateProductController } from '../controller/product.controller.js';
 import { addToCartController, billingSummaryController, deleteCartItemController, getMyCartController, updateCartItemController } from '../controller/cart.controller.js';
+import { BannerController } from '../controller/banner.controller.js';
 import { applyCouponController, removeCouponController, createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
 import { makeNewPaymentController, confirmStripePaymentController, testConfirmStripePayment, getPaymentStatusController, verifyPayment, getAllPaymentHistory, updateRefundStatusController } from '../controller/payment.controller.js';
 import { cancelMyOrderController, deleteMyOrderController, myOrderController, newOrderController, selectUserAddressController, sellerChangeOrderStatusController, updateMyOrderController, getOrderTimelineController, getUserOrdersByStatusController } from '../controller/order.controller.js';
@@ -49,6 +50,8 @@ indexRouter.put("/updateCategory/:id", UserAuth, isAdmin, upload.single("categor
 indexRouter.delete("/deleteCategory/:id", UserAuth, isAdmin, CategoryController.deleteCategory)
 
 // Product
+
+
 indexRouter.post("/new/product", sellerAuth, upload.fields([{ name: "productImage", maxCount: 1 }, { name: "gImage", maxCount: 5 }]), newProductController);
 indexRouter.patch("/seller/updateProduct/:productId", sellerAuth, upload.fields([{ name: "productImage", maxCount: 1 }, { name: "gImage", maxCount: 5 }]), updateProductController);
 indexRouter.delete("/seller/deleteProduct/:id", sellerAuth, deleteProductController);
@@ -61,6 +64,13 @@ indexRouter.get("/get/product/detail/:productId", getProductDetailController)
 indexRouter.get("/search", searchProductController);
 indexRouter.get("/filter", filterProductController);
 indexRouter.get("/packSize/:packSizeId", getPackSizeByIdController);
+
+// Banner
+indexRouter.post("/create/banner", UserAuth, isAdmin, upload.single("bannerImage"), BannerController.createBanner);
+indexRouter.get("/getAllBanners", BannerController.getAllBanners);
+indexRouter.get("/getBannerById/:id", BannerController.getBannerById);
+indexRouter.put("/updateBanner/:id", UserAuth, isAdmin, upload.single("bannerImage"), BannerController.updateBanner);
+indexRouter.delete("/deleteBanner/:id", UserAuth, isAdmin, BannerController.deleteBanner);
 
 //offer.routes.js
 indexRouter.post("/seller/create/offer", sellerAuth, upload.single("offerImage"), createOfferController);
@@ -96,7 +106,7 @@ indexRouter.patch("/user/profile/update", UserAuth, upload.single("avatar"), use
 //user address
 indexRouter.post("/user/address", UserAuth, userAddressAddController);
 indexRouter.patch("/user/address/update/:addressId", UserAuth, userAddressUpdatecontroller);
-indexRouter.delete("/user/address/delete/:addressId", UserAuth, updateCartItemController);
+indexRouter.delete("/user/address/delete/:addressId", UserAuth, userAddressDeleteController);
 indexRouter.get("/user/address", UserAuth, getUserAddressController);
 
 //cart.route.js
@@ -160,24 +170,39 @@ const s3Client = new S3Client({
     },
 });
 
-// List all files in bucket
+const log = {
+    error: (msg) => console.error(msg)
+};
+
+const listAllS3Images = async () => {
+    const command = new ListObjectsV2Command({ Bucket: process.env.S3_BUCKET_NAME });
+    const response = await s3Client.send(command);
+    const bucket = process.env.S3_BUCKET_NAME;
+    const region = process.env.S3_REGION || 'us-east-1';
+    return (response.Contents || []).map(file => {
+        const cdn = process.env.CDN_BASE_URL?.replace(/\/$/, '');
+        if (cdn) return `${cdn}/${file.Key}`;
+        return `https://${bucket}.s3.${region}.amazonaws.com/${encodeURI(file.Key)}`;
+    });
+};
+
+indexRouter.get("/s3/list", async (req, res) => {
+    try {
+        const allUrls = await listAllS3Images();
+        return res.status(200).json({ message: "S3 images listed successfully", total: allUrls.length, images: allUrls });
+    } catch (error) {
+        log.error("List S3 Images Error:" + error.message);
+        return res.status(500).json({ message: "Failed to list S3 images", error: error.message });
+    }
+});
+
 indexRouter.get("/listBucket", async (req, res) => {
     try {
-        const command = new ListObjectsV2Command({ Bucket: process.env.S3_BUCKET_NAME });
-        const response = await s3Client.send(command);
-
-        const files = (response.Contents || []).map(file => ({
-            Key: file.Key,
-            Size: file.Size,
-            LastModified: file.LastModified,
-            ETag: file.ETag,
-            StorageClass: file.StorageClass,
-        }));
-
-        return res.json({ success: true, files });
-    } catch (err) {
-        console.error("Error listing bucket:", err);
-        return res.status(500).json({ success: false, message: err.message });
+        const allUrls = await listAllS3Images();
+        return res.status(200).json({ message: "S3 images listed successfully", total: allUrls.length, images: allUrls });
+    } catch (error) {
+        log.error("List S3 Images Error:" + error.message);
+        return res.status(500).json({ message: "Failed to list S3 images", error: error.message });
     }
 });
 
