@@ -10,7 +10,6 @@ import { ThrowError } from "../utils/Error.utils.js";
 export class HomeController {
     static async getHomePageData(req, res) {
         try {
-            // Fetch everything in parallel
             const [
                 banners,
                 categories,
@@ -36,13 +35,11 @@ export class HomeController {
                 CategoryModel.findOne({ category_name: { $regex: /^seasonal$/i } }),
             ]);
 
-            // Fetch seasonal products if seasonal category exists
             let seasonalProducts = [];
             if (seasonalCategory) {
                 seasonalProducts = await productModel.find({ category: seasonalCategory._id }).populate("category");
             }
 
-            // Get Top Categories based on order count
             let topCategories = [];
             try {
                 topCategories = await orderModel.aggregate([
@@ -89,7 +86,6 @@ export class HomeController {
                 console.error("Failed to fetch top categories aggregation:", err.message);
             }
 
-            // Fallback for topCategories if aggregation is empty (e.g. no orders placed yet)
             if (!topCategories || topCategories.length === 0) {
                 topCategories = categories.slice(0, 6).map(cat => ({
                     _id: cat._id,
