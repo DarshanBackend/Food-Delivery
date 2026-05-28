@@ -34,7 +34,7 @@ const paymentSchema = new mongoose.Schema({
     transactionId: {
         type: String,
         unique: true,
-        sparse: true, // allows multiple null values
+        sparse: true, 
     },
     paymentDate: {
         type: Date,
@@ -43,7 +43,7 @@ const paymentSchema = new mongoose.Schema({
     cardDetails: {
         cardHolderName: String,
         cardLast4Digits: String,
-        cardType: String, // e.g., Visa, MasterCard
+        cardType: String, 
         expiryMonth: Number,
         expiryYear: Number,
         billingAddress: String,

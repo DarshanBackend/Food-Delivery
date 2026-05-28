@@ -8,16 +8,16 @@ export const s3 = new S3Client({
     },
 });
 
-// Build a public URL for the stored key
+
 export const publicUrlForKey = (key) => {
     const cdn = process.env.CDN_BASE_URL?.replace(/\/$/, '');
-    if (cdn) return `${cdn}/${key}`; // CloudFront or custom domain
+    if (cdn) return `${cdn}/${key}`; 
     const bucket = process.env.S3_BUCKET_NAME;
     const region = process.env.S3_REGION || 'us-east-1';
     return `https://${bucket}.s3.${region}.amazonaws.com/${encodeURI(key)}`;
 };
 
-// Delete uploaded object if we need to roll back after a validation error
+
 export const cleanupUploadedIfAny = async (file) => {
     if (file?.key) {
         try {

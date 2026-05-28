@@ -18,24 +18,24 @@ export const makeNewPaymentController = async (req, res) => {
             cardDetails,
         } = req.body;
 
-        // Validate required fields
+        
         if (!userId || !orderId || !paymentMethod) {
             return res.status(400).json({ success: false, message: "Missing required fields" });
         }
 
-        // Validate paymentMethod enum
+        
         const allowedMethods = ["credit_card", "cash_on_delivery", "upi"];
         if (!allowedMethods.includes(paymentMethod)) {
             return res.status(400).json({ success: false, message: `Invalid payment method. Allowed: ${allowedMethods.join(", ")}` });
         }
 
-        // Fetch order
+        
         const order = await orderModel.findById(orderId);
         if (!order) {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
 
-        // Use order.finalAmount as the payment amount
+        
         const amount = order.finalAmount;
 
         let stripePaymentIntentId = null;
@@ -44,10 +44,10 @@ export const makeNewPaymentController = async (req, res) => {
 
         if (paymentMethod === "credit_card" || paymentMethod === "upi") {
             try {
-                // Create Stripe PaymentIntent
+                
                 const paymentIntent = await stripe.paymentIntents.create({
-                    amount: Math.round(amount * 100), // in cents
-                    currency: "usd", // default currency
+                    amount: Math.round(amount * 100), 
+                    currency: "usd", 
                     metadata: { orderId: orderId.toString(), userId: userId.toString() },
                     payment_method_types: paymentMethod === "credit_card" ? ["card"] : ["upi"],
                 });
@@ -59,7 +59,7 @@ export const makeNewPaymentController = async (req, res) => {
             }
         }
 
-        // Create Payment record
+        
         const payment = await paymentModel.create({
             userId,
             orderId,
@@ -72,7 +72,7 @@ export const makeNewPaymentController = async (req, res) => {
             clientSecret,
         });
 
-        // === Remove ordered items from user's cart ===
+        
         if (order.items && order.items.length > 0) {
             await cartModel.updateOne(
                 { userId },
@@ -89,7 +89,7 @@ export const makeNewPaymentController = async (req, res) => {
             );
         }
 
-        // Add stripe credentials to order document if needed
+        
         order.stripePaymentIntentId = stripePaymentIntentId;
         order.clientSecret = clientSecret;
         order.paymentStatus = "Pending";
@@ -167,7 +167,7 @@ export const confirmStripePaymentController = async (req, res) => {
         order.paymentStatus = "Paid";
         await order.save({ session });
 
-        // Decrease stock for each item in the order using the positional operator
+        
         for (const item of order.items) {
             await productModel.updateOne(
                 { _id: item.productId, "packSizes._id": item.packSizeId },
@@ -243,7 +243,7 @@ export const testConfirmStripePayment = async (req, res) => {
         order.status = "Pending";
         await order.save({ session });
 
-        // Decrease stock for each item in the order using the positional operator
+        
         for (const item of order.items) {
             await productModel.updateOne(
                 { _id: item.productId, "packSizes._id": item.packSizeId },
@@ -446,7 +446,7 @@ export const updateRefundStatusController = async (req, res) => {
             return res.status(404).json({ success: false, message: "Order not found." });
         }
 
-        // Verify seller has items in this order
+        
         const hasSellerItem = order.items.some(item => item.sellerId.toString() === sellerId.toString());
         if (!hasSellerItem) {
             return res.status(403).json({ success: false, message: "You are not authorized to update this refund." });

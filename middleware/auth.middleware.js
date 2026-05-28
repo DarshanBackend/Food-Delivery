@@ -5,7 +5,7 @@ import { config } from 'dotenv'; config();
 
 export const UserAuth = async (req, res, next) => {
     try {
-        // Check if JWT_SECRET is properly configured
+        
         if (!process.env.JWT_SECRET) {
             console.error('JWT_SECRET is not configured');
             return sendErrorResponse(res, 500, 'Server configuration error');
@@ -76,7 +76,7 @@ export const sellerAuth = (req, res, next) => {
             return res.status(403).json({ success: false, message: "Seller access required" });
         }
 
-        req.user = decoded; // attach full decoded payload
+        req.user = decoded; 
         next();
     } catch (error) {
         return res.status(401).json({ success: false, message: "Invalid or expired token" });

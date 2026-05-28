@@ -5,6 +5,7 @@ import { uploadFile } from "../middleware/imageupload.js";
 import axios from "axios";
 import bcrypt from 'bcryptjs';
 import sellerModel from "../model/seller.model.js";
+import https from "https";
 
 export const getProfileController = async (req, res) => {
     try {
@@ -32,37 +33,37 @@ export const userProfileUpdateController = async (req, res) => {
     try {
         const { id } = req?.user;
 
-        // Validate user id
+        
         if (!id || !mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid or missing user ID from token");
         }
 
         const { name, email, mobileNo } = req.body || {};
 
-        // Body must exist and at least one field provided
+        
         if (!req.body || (!name && !email && !mobileNo && !req.file)) {
             return sendBadRequestResponse(res, "At least one of name, email, mobileNo, or avatar is required!");
         }
 
         let avatarUrl;
         if (req.file) {
-            // Upload avatar to S3
+            
             const result = await uploadFile(req.file);
             avatarUrl = result.url;
         }
 
-        // Build update object dynamically (only include provided fields)
+        
         const updateData = {};
         if (name) updateData.name = name;
         if (email) updateData.email = email;
         if (mobileNo) updateData.mobileNo = mobileNo;
         if (avatarUrl) updateData.avatar = avatarUrl;
 
-        // Update user profile
+        
         const updatedUser = await UserModel.findByIdAndUpdate(
             id,
             { $set: updateData },
-            { new: true } // return updated document
+            { new: true } 
         );
 
         if (!updatedUser) {
@@ -81,27 +82,27 @@ export const userAddressAddController = async (req, res) => {
     try {
         const { id } = req?.user;
 
-        // ✅ Validate user id
+        
         if (!id || !mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid User Id in Token!");
         }
 
         const { firstName, lastName, phone, email, houseNo, landmark, pincode, city, state, country, saveAs } = req?.body;
 
-        // ✅ Check required fields
+        
         if (!firstName || !lastName || !phone || !email || !houseNo || !pincode) {
             return sendBadRequestResponse(res, "All required fields (firstName, lastName, phone, email, houseNo, pincode) must be provided!");
         }
 
-        // ✅ Verify pincode using India Post API
-        const pincodeResp = await axios.get(`https://api.postalpincode.in/pincode/${pincode}`);
+        const agent = new https.Agent({ rejectUnauthorized: false });
+        const pincodeResp = await axios.get(`https://api.postalpincode.in/pincode/${pincode}`, { httpsAgent: agent });
         const pinData = pincodeResp.data[0];
 
         if (pinData.Status !== "Success" || !pinData.PostOffice || pinData.PostOffice.length === 0) {
             return sendBadRequestResponse(res, "Invalid or inactive Pincode!");
         }
         let Lemail = String(email).toLowerCase();
-        // If city/state not given, auto-fill from API
+        
         const postOffice = pinData.PostOffice[0];
         const addressData = {
             firstName,
@@ -117,7 +118,7 @@ export const userAddressAddController = async (req, res) => {
             saveAs: saveAs || "Home"
         };
 
-        // ✅ Save address to user
+        
         const updatedUser = await UserModel.findByIdAndUpdate(
             id,
             { $push: { address: addressData } },
@@ -131,13 +132,13 @@ export const userAddressAddController = async (req, res) => {
     }
 };
 
-//update user address controller
-//address have many so thir indivual  index id pass and update
+
+
 export const userAddressUpdatecontroller = async (req, res) => {
     try {
-        const { id } = req?.user; // userId from auth token
+        const { id } = req?.user; 
         const { addressId } = req?.params;
-        // ✅ Validate user id
+        
         if (!id || !mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid User Id in Token!");
         }
@@ -156,12 +157,12 @@ export const userAddressUpdatecontroller = async (req, res) => {
             saveAs,
         } = req?.body;
 
-        // ✅ Validate addressId
+        
         if (!addressId || !mongoose.Types.ObjectId.isValid(addressId)) {
             return sendBadRequestResponse(res, "Valid addressId must be provided!");
         }
 
-        // ✅ Build update object dynamically (only fields that are provided)
+        
         const updateFields = {};
         if (firstName) updateFields["address.$.firstName"] = firstName;
         if (lastName) updateFields["address.$.lastName"] = lastName;
@@ -175,7 +176,7 @@ export const userAddressUpdatecontroller = async (req, res) => {
         if (country) updateFields["address.$.country"] = country;
         if (saveAs) updateFields["address.$.saveAs"] = saveAs;
 
-        // ✅ Update address using positional operator $
+        
         const updatedUser = await UserModel.findOneAndUpdate(
             { _id: id, "address._id": addressId },
             { $set: updateFields },
@@ -215,7 +216,7 @@ export const userAddressDeleteController = async (req, res) => {
             return sendBadRequestResponse(res, "address Id or Req.params Are required tO request!");
         }
 
-        //delete Address
+        
 
         const deleteUserAddress = await UserModel.findByIdAndUpdate(
             id,
@@ -272,19 +273,19 @@ export const userPasswordChangeController = async (req, res) => {
             return sendBadRequestResponse(res, "Old password and new password required");
         }
 
-        const user = await UserModel.findById(id).select("password"); // make sure password is selected
+        const user = await UserModel.findById(id).select("password"); 
 
         if (!user) {
             return sendBadRequestResponse(res, "User not found");
         }
 
-        // Compare old password
+        
         const isMatch = await bcrypt.compare(oldPassword, user.password);
         if (!isMatch) {
             return sendBadRequestResponse(res, "Old password is incorrect");
         }
 
-        // Hash new password
+        
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(newPassword, salt);
 
@@ -320,7 +321,7 @@ export const userRemoveAccountController = async (req, res) => {
     }
 }
 
-//seller profile
+
 export const getSellerProfileController = async (req, res) => {
     try {
         const { id } = req?.user;
@@ -330,7 +331,7 @@ export const getSellerProfileController = async (req, res) => {
         }
 
         const seller = await sellerModel.findById(id).select("-password");
-        // exclude password field for security
+        
 
         if (!seller) {
             return sendNotFoundResponse(res, "Seller not found");

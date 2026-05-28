@@ -8,7 +8,7 @@ import { uploadFile } from "../middleware/imageupload.js";
 
 export class CategoryController {
 
-    // Create new Category
+    
     static async createCategory(req, res) {
         try {
             const { category_name } = req.body;
@@ -42,7 +42,7 @@ export class CategoryController {
         }
     }
 
-    // Get all categories
+    
     static async getAllCategory(req, res) {
         try {
             const categories = await CategoryModel.find();
@@ -55,7 +55,7 @@ export class CategoryController {
         }
     }
 
-    // Get top categories based on order items
+    
     static async getTopCategories(req, res) {
         try {
             const OrderModel = mongoose.model("order");
@@ -106,7 +106,7 @@ export class CategoryController {
         }
     }
 
-    // Get category by ID
+    
     static async getCategoryById(req, res) {
         try {
             const { id } = req.params;
@@ -126,7 +126,7 @@ export class CategoryController {
         }
     }
 
-    // Update category
+    
     static async updateCategory(req, res) {
         try {
             const { id } = req.params;
@@ -141,10 +141,10 @@ export class CategoryController {
                 return sendErrorResponse(res, 404, "Category not found");
             }
 
-            // Handle Image Upload
+            
             if (req.file) {
                 try {
-                    // Delete old image from S3 if exists
+                    
                     if (existingCategory.category_image_key) {
                         try {
                             await s3.send(new DeleteObjectCommand({
@@ -156,7 +156,7 @@ export class CategoryController {
                         }
                     }
 
-                    // Upload new file
+                    
                     const result = await uploadFile(req.file);
                     existingCategory.category_image = result.url;
                     existingCategory.category_image_key = result.key;
@@ -166,7 +166,7 @@ export class CategoryController {
                 }
             }
 
-            // Update category_name if provided
+            
             if (category_name) {
                 existingCategory.category_name = category_name;
             }
@@ -180,7 +180,7 @@ export class CategoryController {
         }
     }
 
-    // Delete category
+    
     static async deleteCategory(req, res) {
         try {
             const { id } = req.params;
@@ -194,7 +194,7 @@ export class CategoryController {
                 return sendErrorResponse(res, 404, "Category not found");
             }
 
-            // 🗑️ Delete image from S3 if exists
+            
             if (category.category_image_key) {
                 try {
                     await s3.send(new DeleteObjectCommand({
@@ -206,7 +206,7 @@ export class CategoryController {
                 }
             }
 
-            // ❌ Delete category from DB
+            
             await category.deleteOne();
 
             return sendSuccessResponse(res, "Category deleted successfully");

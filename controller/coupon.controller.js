@@ -9,7 +9,7 @@ import cartModel from "../model/cart.model.js";
 export const createCoupon = async (req, res) => {
     try {
         const { code, discountType, discountValue, minOrderValue, maxDiscount, expiryDate, isActive } = req.body;
-        const sellerId = req.user.id; // seller creating the coupon
+        const sellerId = req.user.id; 
 
         if (!code || !discountType || !discountValue || !expiryDate) {
             return sendBadRequestResponse(res, "Required fields missing");
@@ -29,7 +29,7 @@ export const createCoupon = async (req, res) => {
             maxDiscount: maxDiscount || null,
             expiryDate: expiry,
             isActive: isActive ?? true,
-            sellerId // assign seller
+            sellerId 
         });
 
         return sendSuccessResponse(res, "Coupon created successfully", newCoupon);
@@ -56,12 +56,12 @@ export const getCouponById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Validate ID
+        
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid Coupon ID");
         }
 
-        // Find coupon
+        
         const coupon = await CouponModel.findById(id);
         if (!coupon) {
             return sendNotFoundResponse(res, "Coupon not found!");
@@ -78,18 +78,18 @@ export const updateCoupon = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Validate ID
+        
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid Coupon ID");
         }
 
-        // Check coupon exists
+        
         const existingCoupon = await CouponModel.findById(id);
         if (!existingCoupon) {
             return sendNotFoundResponse(res, "Coupon not found!");
         }
 
-        // Only allow valid fields to update
+        
         const allowedUpdates = [
             "code",
             "discountType",
@@ -107,7 +107,7 @@ export const updateCoupon = async (req, res) => {
             }
         });
 
-        // Update coupon
+        
         const updatedCoupon = await CouponModel.findByIdAndUpdate(id, updates, { new: true });
 
         return sendSuccessResponse(res, "Coupon updated successfully", updatedCoupon);
@@ -120,18 +120,18 @@ export const deleteCoupon = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Validate ID
+        
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid Coupon ID");
         }
 
-        // Check if coupon exists
+        
         const coupon = await CouponModel.findById(id);
         if (!coupon) {
             return sendNotFoundResponse(res, "Coupon not found!");
         }
 
-        // Delete coupon
+        
         await CouponModel.findByIdAndDelete(id);
 
         return sendSuccessResponse(res, "Coupon deleted successfully", { deletedId: id });

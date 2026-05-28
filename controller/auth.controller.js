@@ -8,7 +8,7 @@ import transporter from '../utils/Email.config.js'
 import axios from 'axios';
 import { sendBadRequestResponse, sendNotFoundResponse, sendSuccessResponse } from '../utils/Response.utils.js';
 
-//twillio config
+
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 
@@ -16,21 +16,21 @@ const authToken = process.env.TWILIO_AUTH_TOKEN;
 const client = twilio(accountSid, authToken);
 
 export class AuthController {
-    //salt rounds
+    
     static saltRounds = 10
 
-    //JWT_SECRET define
+    
     static JWT_SECRET = process.env.JWT_SECRET
 
-    //OTP MAp
+    
     static otpMap = new Map()
 
-    //new Register user Controller [core register]
+    
     static async newUserRegisterController(req, res) {
         try {
             const { name, mobileNo, email, password, role } = req.body;
 
-            // Validate request
+            
             if (!name && !mobileNo && !email && !password) {
                 return res.status(400).json({
                     success: false,
@@ -38,7 +38,7 @@ export class AuthController {
                 });
             }
 
-            //check is Already Register or Not
+            
             const isEmail = await UserModel.findOne({ email: email });
             if (isEmail) {
                 return res.status(409).json({
@@ -47,7 +47,7 @@ export class AuthController {
                 })
             }
 
-            //check is Already Register or Not
+            
             const isMobile = await UserModel.findOne({ mobileNo: mobileNo });
             if (isMobile) {
                 return res.status(409).json({
@@ -56,10 +56,10 @@ export class AuthController {
                 })
             }
 
-            // Hash password
+            
             const hashedPassword = await bcrypt.hash(password, AuthController.saltRounds);
 
-            //generate random avatar image.
+            
             function Ravatar(name) {
                 try {
                     const formattedName = name.trim().replace(/\s+/g, "+");
@@ -75,7 +75,7 @@ export class AuthController {
             }
             const profileAvatar = Ravatar(name) || "";
 
-            // Create new user
+            
             const newUser = await UserModel.create({
                 name,
                 email,
@@ -85,7 +85,7 @@ export class AuthController {
                 role
             });
 
-            // Send OTP via Twilio
+            
             try {
                 const verification = await client.verify.v2.services(process.env.TWILIO_VERIFY_SID)
                     .verifications.create({
@@ -166,14 +166,14 @@ export class AuthController {
         }
     }
 
-    //verify mobile otp & verifed : true,
+    
     static async verifyMobileOtpController(req, res) {
         const COMMON_OTP = "000000";
 
         try {
             const { mobileNo, otp } = req.body;
 
-            // Validate input
+            
             if (!mobileNo && !otp) {
                 return res.status(400).json({
                     success: false,
@@ -181,7 +181,7 @@ export class AuthController {
                 });
             }
 
-            // Check if user exists
+            
             const user = await UserModel.findOne({ mobileNo });
             if (user) {
                 const payload = {
@@ -201,7 +201,7 @@ export class AuthController {
                 });
             }
 
-            // Twilio OTP verification
+            
             try {
                 const verificationCheck = await client.verify.v2
                     .services(process.env.TWILIO_VERIFY_SID)
@@ -226,7 +226,7 @@ export class AuthController {
                 console.warn("Twilio Verification Failed:", twilioError.message);
             }
 
-            // common OTP checking
+            
             if (otp === COMMON_OTP) {
                 user.verified = true;
                 await user.save();
@@ -240,7 +240,7 @@ export class AuthController {
 
             user.otp = undefined;
 
-            // If both failed → invalid OTP
+            
             return res.status(400).json({
                 success: false,
                 message: "Invalid OTP"
@@ -255,7 +255,7 @@ export class AuthController {
         }
     }
 
-    // social register controller register & login with (Google/facebook)
+    
     static async newSocialRegisterLoginController(req, res) {
         try {
             const { uid, name, email, avatar } = req.body;
@@ -286,7 +286,7 @@ export class AuthController {
                 });
             }
 
-            // Create new social user
+            
             const newUser = await UserModel.create({
                 uid,
                 name,
@@ -311,7 +311,7 @@ export class AuthController {
         }
     }
 
-    //login (core) using email & password
+    
     static async userLoginController(req, res) {
         try {
             const { email, password } = req.body;
@@ -323,7 +323,7 @@ export class AuthController {
                 });
             }
 
-            // Fetch user with password
+            
             const user = await UserModel.findOne({ email }).select("+password");
             if (!user) {
                 return res.status(404).json({
@@ -332,7 +332,7 @@ export class AuthController {
                 });
             }
 
-            // Correct bcrypt usage
+            
             const isPasswordValid = await bcrypt.compare(password, user.password);
             if (!isPasswordValid) {
                 return res.status(401).json({
@@ -372,12 +372,12 @@ export class AuthController {
         }
     }
 
-    //forget-password (send-Email OTP)
+    
     static async sendForgotMailOtpController(req, res) {
         try {
             const { email } = req.body;
 
-            // Validate input
+            
             if (!email) {
                 return res.status(400).json({
                     success: false,
@@ -385,7 +385,7 @@ export class AuthController {
                 });
             }
 
-            // Find user
+            
             const user = await UserModel.findOne({ email });
             if (!user) {
                 return res.status(404).json({
@@ -394,22 +394,22 @@ export class AuthController {
                 });
             }
 
-            // Generate OTP
+            
             const OTP = Math.floor(100000 + Math.random() * 900000).toString();
             const from_email = process.env.SMTP_EMAIL || "hit.kalathiyainfotech@gmail.com";
 
-            // Save OTP in DB with expiry
+            
             user.resetOtp = OTP;
-            user.resetOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+            user.resetOtpExpiry = Date.now() + 10 * 60 * 1000; 
             await user.save();
 
-            // Also store OTP in memory (fast lookup, optional)
+            
             AuthController.otpMap.set(email, {
                 OTP,
                 expiresAt: Date.now() + 10 * 60 * 1000
             });
 
-            // Send email
+            
             await transporter.sendMail({
                 from: from_email,
                 to: email,
@@ -441,7 +441,7 @@ export class AuthController {
                 success: true,
                 message: "Forgot password OTP sent successfully!",
                 toEmail: email,
-                otp: OTP // ⚠️ For testing only, remove in production
+                otp: OTP 
             });
 
         } catch (error) {
@@ -455,12 +455,12 @@ export class AuthController {
     }
 
 
-    //verify otp
+    
     static async verifyForgetOtpController(req, res) {
         try {
             const { email, otp } = req.body;
 
-            // Validate input
+            
             if (!email || !otp) {
                 return res.status(400).json({
                     success: false,
@@ -468,7 +468,7 @@ export class AuthController {
                 });
             }
 
-            // Find user
+            
             const user = await UserModel.findOne({ email });
             if (!user) {
                 return res.status(404).json({
@@ -477,10 +477,10 @@ export class AuthController {
                 });
             }
 
-            // Check OTP in DB
+            
             if (user.resetOtp && user.resetOtpExpiry && user.resetOtpExpiry > Date.now()) {
                 if (user.resetOtp === otp) {
-                    // Clear OTP after verification
+                    
                     user.otp = null;
                     user.resetOtpExpiry = null;
                     await user.save();
@@ -497,7 +497,7 @@ export class AuthController {
                 }
             }
 
-            // Check OTP in-memory (fallback for testing)
+            
             const otpEntry = AuthController.otpMap.get(email);
             if (otpEntry && otpEntry.expiresAt > Date.now()) {
                 if (otpEntry.OTP === otp) {
@@ -515,7 +515,7 @@ export class AuthController {
                 }
             }
 
-            // If OTP expired or not found
+            
             return res.status(400).json({
                 success: false,
                 message: "OTP expired or not found. Please request a new one."
@@ -531,12 +531,12 @@ export class AuthController {
         }
     }
 
-    //reset password
+    
     static async resetPasswordController(req, res) {
         try {
             const { email, newPassword } = req.body;
 
-            //Validate input
+            
             if (!email || !newPassword) {
                 return res.status(400).json({
                     success: false,
@@ -544,7 +544,7 @@ export class AuthController {
                 });
             }
 
-            //Find user
+            
             const user = await UserModel.findOne({ email });
             if (!user) {
                 return res.status(404).json({
@@ -553,7 +553,7 @@ export class AuthController {
                 });
             }
 
-            const hashedPassword = await bcrypt.hash(newPassword, 10); // 10 salt rounds
+            const hashedPassword = await bcrypt.hash(newPassword, 10); 
 
             user.password = hashedPassword;
             user.resetOtp = null;

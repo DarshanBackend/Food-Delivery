@@ -49,7 +49,7 @@ const UserSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        select: false // Exclude password from queries by default
+        select: false 
     },
     role: {
         type: String,

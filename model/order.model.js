@@ -44,7 +44,7 @@ const orderSchema = new mongoose.Schema(
             },
         ],
 
-        // Global delivery address for the order
+        
         deliveryAddress: UserAddressSchema,
 
         totalAmount: { type: Number, required: true, default: 0 },

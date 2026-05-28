@@ -4,14 +4,14 @@ import productModel from "../model/product.model.js";
 import { sendBadRequestResponse, sendErrorResponse, sendNotFoundResponse, sendResponse, sendSuccessResponse } from "../utils/Response.utils.js";
 
 
-//addToCart Controller
+
 export const addToCartController = async (req, res) => {
     try {
         const { id: userId } = req.user;
         const { productId } = req.params;
         const { packSizeId, quantity } = req.body;
 
-        // === Validation ===
+        
         if (!mongoose.Types.ObjectId.isValid(productId)) {
             return sendErrorResponse(res, 400, "Invalid product ID");
         }
@@ -22,22 +22,22 @@ export const addToCartController = async (req, res) => {
             return sendErrorResponse(res, 400, "Quantity must be at least 1");
         }
 
-        // === Product check ===
+        
         const product = await productModel.findById(productId);
         if (!product) return sendErrorResponse(res, 404, "Product not found");
 
-        // === Pack size check ===
+        
         const pack = product.packSizes.find(
             (p) => p._id.toString() === packSizeId.toString()
         );
         if (!pack) return sendErrorResponse(res, 400, "Invalid pack size");
 
-        // === Cart check ===
+        
         let cart = await cartModel.findOne({ userId: userId });
         if (!cart) cart = new cartModel({ userId, items: [] });
         cart.appliedCoupon = undefined;
 
-        // === Existing item check ===
+        
         const existingItem = cart.items.find((item) => {
             const prodId =
                 item.productId && item.productId._id
@@ -63,7 +63,7 @@ export const addToCartController = async (req, res) => {
         await cart.save();
         await cart.populate("items.productId", "productName packSizes");
 
-        // === Calculate total safely ===
+        
         let totalAmount = 0;
         cart.items.forEach((item) => {
             if (item.productId?.packSizes) {
@@ -86,19 +86,18 @@ export const addToCartController = async (req, res) => {
     }
 };
 
-//get my cart with user , product , packSie ,qaunity info
+
 export const getMyCartController = async (req, res) => {
     try {
         const { id: userId } = req?.user;
 
-        // Validation
+        
         if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
             return sendBadRequestResponse(res, "User ID not found or invalid!");
         }
 
-        // Fetch cart with populated product info
+        
         const cart = await cartModel.findOne({ userId })
-            .populate("userId", "-password -__v")
             .populate({
                 path: "items.productId",
                 select: "-productHealthBenefit -productStorage -gImage"
@@ -109,23 +108,23 @@ export const getMyCartController = async (req, res) => {
             return sendNotFoundResponse(res, "User cart not found");
         }
 
-        // Check if cart is empty
+        
         if (cart.items.length === 0) {
-            return sendResponse(res, 204, true, "Cart is empty! Please add products first.", cart);
+            return sendSuccessResponse(res, "Cart is empty! Please add products first.", cart);
         }
 
-        // Filter packSizes to include only the selected packSize and calculate totalAmount
+        
         let totalAmount = 0;
         const filteredItems = cart.items.map((item) => {
-            const product = item.productId.toObject(); // Convert Mongoose doc to plain JS object
+            const product = item.productId.toObject(); 
 
             if (product.packSizes && item.packSizeId) {
-                // Keep only the packSize that matches item.packSizeId
+                
                 product.packSizes = product.packSizes.filter(
                     (p) => p._id.toString() === item.packSizeId.toString()
                 );
 
-                // Add to totalAmount
+                
                 if (product.packSizes.length > 0) {
                     totalAmount += product.packSizes[0].price * item.quantity;
                 }
@@ -137,7 +136,7 @@ export const getMyCartController = async (req, res) => {
             };
         });
 
-        // Return filtered cart with totalAmount
+        
         return sendSuccessResponse(res, "My cart items fetched successfully", {
             ...cart.toObject(),
             items: filteredItems,
@@ -151,14 +150,14 @@ export const getMyCartController = async (req, res) => {
 };
 
 
-//update cart
+
 export const updateCartItemController = async (req, res) => {
     try {
         const { id: userId } = req.user;
         const { productId } = req.params;
         const { packSizeId, quantity } = req.body;
 
-        // === Validation ===
+        
         if (!mongoose.Types.ObjectId.isValid(productId)) {
             return sendErrorResponse(res, 400, "Invalid product ID");
         }
@@ -169,11 +168,11 @@ export const updateCartItemController = async (req, res) => {
             return sendErrorResponse(res, 400, "Quantity must be at least 1");
         }
 
-        // === Find cart ===
+        
         const cart = await cartModel.findOne({ userId });
         if (!cart) return sendErrorResponse(res, 404, "Cart not found");
 
-        // === Find item ===
+        
         const item = cart.items.find(
             (i) =>
                 i.productId.toString() === productId &&
@@ -181,14 +180,14 @@ export const updateCartItemController = async (req, res) => {
         );
         if (!item) return sendErrorResponse(res, 404, "Item not found in cart");
 
-        // === Update only quantity ===
+        
         item.quantity = quantity;
         cart.appliedCoupon = undefined;
 
         await cart.save();
         await cart.populate("items.productId", "productName packSizes");
 
-        // === Calculate total ===
+        
         let totalAmount = 0;
         cart.items.forEach((item) => {
             if (item.productId?.packSizes) {
@@ -211,7 +210,7 @@ export const updateCartItemController = async (req, res) => {
     }
 };
 
-// delete by id
+
 export const deleteCartItemController = async (req, res) => {
     try {
         const { id: userId } = req.user;
@@ -243,7 +242,7 @@ export const deleteCartItemController = async (req, res) => {
     }
 };
 
-// Billing Summary Controller
+
 export const billingSummaryController = async (req, res) => {
     try {
         const { id: userId } = req.user;

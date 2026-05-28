@@ -19,24 +19,24 @@ import { HomeController } from '../controller/home.controller.js';
 
 const indexRouter = express.Router();
 
-//base url = domain/api
+
 
 indexRouter.get("/getHomePageData", HomeController.getHomePageData);
 
-//register
+
 indexRouter.post("/new/user", AuthController.newUserRegisterController);
 indexRouter.post("/verfiy/motp", AuthController.verifyMobileOtpController);
 
-//register & login with (google/facebook)
+
 indexRouter.post("/new/social/user", AuthController.newSocialRegisterLoginController)
 
-//User login
+
 indexRouter.post("/login", AuthController.userLoginController);
 indexRouter.post("/forget/password", AuthController.sendForgotMailOtpController);
 indexRouter.post("/verify/forget/password", AuthController.verifyForgetOtpController)
 indexRouter.post("/reset/password", AuthController.resetPasswordController);
 
-//seller.router.js
+
 indexRouter.post("/new/seller", newSellerController)
 indexRouter.post("/verify/seller/otp", verifySellerMobileOtpController)
 indexRouter.post("/seller/login", sellerLoginController)
@@ -44,7 +44,7 @@ indexRouter.post("/seller/forget/password", sellerForgetPasswordController);
 indexRouter.post("/seller/verify/forget/password", sellerVerifyForgetOtpController)
 indexRouter.post("/seller/reset/password", sellerPasswordResetController);
 
-// Category 
+
 indexRouter.post("/createCategory", UserAuth, isAdmin, upload.single("category_image"), CategoryController.createCategory)
 indexRouter.get("/getAllCategory", CategoryController.getAllCategory)
 indexRouter.get("/getTopCategories", CategoryController.getTopCategories)
@@ -52,13 +52,13 @@ indexRouter.get("/getCategoryById/:id", CategoryController.getCategoryById)
 indexRouter.put("/updateCategory/:id", UserAuth, isAdmin, upload.single("category_image"), CategoryController.updateCategory)
 indexRouter.delete("/deleteCategory/:id", UserAuth, isAdmin, CategoryController.deleteCategory)
 
-// Product
+
 
 
 indexRouter.post("/new/product", sellerAuth, upload.fields([{ name: "productImage", maxCount: 1 }, { name: "gImage", maxCount: 5 }]), newProductController);
 indexRouter.patch("/seller/updateProduct/:productId", sellerAuth, upload.fields([{ name: "productImage", maxCount: 1 }, { name: "gImage", maxCount: 5 }]), updateProductController);
 indexRouter.delete("/seller/deleteProduct/:id", sellerAuth, deleteProductController);
-indexRouter.get("/all/products", getAllProductsController); // *
+indexRouter.get("/all/products", getAllProductsController); 
 indexRouter.get("/get/short/productBycategory/:categoryId", getProductByCategoryController);
 indexRouter.get("/get/productBycategory/:categoryId", getProductByCategoryId);
 indexRouter.get("/seasonal/products", getSeasonalProductsController);
@@ -68,14 +68,14 @@ indexRouter.get("/search", searchProductController);
 indexRouter.get("/filter", filterProductController);
 indexRouter.get("/packSize/:packSizeId", getPackSizeByIdController);
 
-// Banner
+
 indexRouter.post("/create/banner", UserAuth, isAdmin, upload.single("bannerImage"), BannerController.createBanner);
 indexRouter.get("/getAllBanners", BannerController.getAllBanners);
 indexRouter.get("/getBannerById/:id", BannerController.getBannerById);
 indexRouter.put("/updateBanner/:id", UserAuth, isAdmin, upload.single("bannerImage"), BannerController.updateBanner);
 indexRouter.delete("/deleteBanner/:id", UserAuth, isAdmin, BannerController.deleteBanner);
 
-//offer.routes.js
+
 indexRouter.post("/seller/create/offer", sellerAuth, upload.single("offerImage"), createOfferController);
 indexRouter.get("/getAlloffers", getAllOffersController);
 indexRouter.get("/getOffersById/:id", getOfferByIdController);
@@ -85,34 +85,34 @@ indexRouter.delete("/seller/delete/offer/:id", sellerAuth, deleteOfferController
 
 
 
-//seller.kyc.router.js
-indexRouter.post("/seller/gst/verify", sellerAuth, sellerGstVerifyAndInsertController);
-indexRouter.post("/seller/business/address", sellerAuth, setSellerBusinessAddressController); //business info save + otp send for GST verify
-indexRouter.post("/seller/verify/otp", sellerAuth, verifySellerOtpController)
-indexRouter.post("/seller/gst/reset/otp", sellerAuth, sellerGstResetOtpController); //resend gst verif y OTP
 
-//seller.brand.info.router.js
+indexRouter.post("/seller/gst/verify", sellerAuth, sellerGstVerifyAndInsertController);
+indexRouter.post("/seller/business/address", sellerAuth, setSellerBusinessAddressController); 
+indexRouter.post("/seller/verify/otp", sellerAuth, verifySellerOtpController)
+indexRouter.post("/seller/gst/reset/otp", sellerAuth, sellerGstResetOtpController); 
+
+
 indexRouter.post("/seller/brand/info", sellerAuth, sellerBrandInfoAddController);
-//seller bank detail verify & insert record
+
 indexRouter.post("/seller/bank/insert", sellerAuth, sellerBankInfoSetController);
-//seller.pickup.address.js
+
 indexRouter.post("/seller/pickup/address", sellerAuth, sellerPickUpAddressSetController)
-//seller agreement accept or not
+
 indexRouter.post('/seller/agreement', sellerAuth, trueSellerAgreementController);
 
 
-//profile.route.js
+
 indexRouter.get("/user/profile", UserAuth, getProfileController);
-//update email,name,mobile No,avatar;
+
 indexRouter.patch("/user/profile/update", UserAuth, upload.single("avatar"), userProfileUpdateController);
 
-//user address
+
 indexRouter.post("/user/address", UserAuth, userAddressAddController);
 indexRouter.patch("/user/address/update/:addressId", UserAuth, userAddressUpdatecontroller);
 indexRouter.delete("/user/address/delete/:addressId", UserAuth, userAddressDeleteController);
 indexRouter.get("/user/address", UserAuth, getUserAddressController);
 
-//cart.route.js
+
 indexRouter.post("/add/cart/:productId", UserAuth, addToCartController);
 indexRouter.get("/my/cart", UserAuth, getMyCartController)
 indexRouter.patch("/update/cart/:productId", UserAuth, updateCartItemController)
@@ -120,20 +120,20 @@ indexRouter.delete("/delete/item/:cartItemId", UserAuth, deleteCartItemControlle
 indexRouter.get("/cart/billing-summary", UserAuth, billingSummaryController)
 
 
-//change password
+
 indexRouter.post("/user/change/password", UserAuth, userPasswordChangeController);
-//delete Account
+
 indexRouter.delete("/user/remove/account", UserAuth, userRemoveAccountController);
-//seller.profile
+
 indexRouter.get("/seller/profile", sellerAuth, getSellerProfileController);
 
-//admin api
+
 indexRouter.get("/getAllnewUser", AuthController.getAllnewUser)
 indexRouter.get("/getUser", UserAuth, AuthController.getUser)
 indexRouter.get("/getAllSeller", getAllSeller)
 indexRouter.get("/getSeller", sellerAuth, getSeller)
 
-// Coupon
+
 indexRouter.post("/seller/createCoupon", sellerAuth, createCoupon);
 indexRouter.get("/getAllCoupon", UserAuth, getAllCoupon);
 indexRouter.get("/getCouponById/:id", UserAuth, getCouponById);
@@ -143,7 +143,7 @@ indexRouter.post("/apply-coupon", UserAuth, applyCouponController);
 indexRouter.post("/remove-coupon", UserAuth, removeCouponController);
 
 
-//order.routes.js
+
 indexRouter.put("/users/select-address/:addressId", UserAuth, selectUserAddressController)
 indexRouter.post("/new/order", UserAuth, newOrderController)
 indexRouter.patch("/update/myorder/:orderId", UserAuth, updateMyOrderController);
@@ -156,7 +156,7 @@ indexRouter.patch("/seller/order/status/:orderId", sellerAuth, sellerChangeOrder
 
 
 
-// payment.route.js
+
 indexRouter.post("/new/payment", UserAuth, makeNewPaymentController);
 indexRouter.post("/confirm-payment", UserAuth, confirmStripePaymentController);
 indexRouter.post("/test-confirm-payment", UserAuth, testConfirmStripePayment);
@@ -209,10 +209,10 @@ indexRouter.get("/listBucket", async (req, res) => {
     }
 });
 
-// Delete a file from bucket
+
 indexRouter.delete("/deleteBucketFile", async (req, res) => {
     try {
-        const { key } = req.body; // example: "images/1757483363902-9.jfif"
+        const { key } = req.body; 
         if (!key) return res.status(400).json({ success: false, message: "File key is required" });
 
         await s3Client.send(new DeleteObjectCommand({

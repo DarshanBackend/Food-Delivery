@@ -11,18 +11,18 @@ import axios from 'axios';
 import { stat } from 'fs';
 import { ThrowError } from '../utils/Error.utils.js';
 
-//global config
+
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const saltRounds = 10;
 const JWT_SECRET = process.env.JWT_SECRET
 
 
-// new seller register & verify -otp send
+
 export const newSellerController = async (req, res) => {
     try {
         const { mobileNo, email, password } = req.body;
 
-        // Validate request
+        
         if (!mobileNo || !email || !password) {
             return res.status(400).json({
                 success: false,
@@ -30,7 +30,7 @@ export const newSellerController = async (req, res) => {
             });
         }
 
-        // Check if already registered
+        
         const existingSeller = await sellerModel.findOne({ mobileNo: mobileNo });
         if (existingSeller) {
             return res.status(409).json({
@@ -39,11 +39,11 @@ export const newSellerController = async (req, res) => {
             });
         }
 
-        // Hash password
+        
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
 
-        //generate random avatar image.
+        
         function Ravatar(email) {
             try {
                 const formattedName = email.trim().replace(/\s+/g, "+");
@@ -59,7 +59,7 @@ export const newSellerController = async (req, res) => {
         }
         const profileAvatar = Ravatar(email) || "";
 
-        // Create new seller
+        
         const newSeller = await sellerModel.create({
             email,
             mobileNo,
@@ -67,7 +67,7 @@ export const newSellerController = async (req, res) => {
             password: hashedPassword,
         });
 
-        // Send OTP via Twilio
+        
         try {
             const verification = await client.verify.v2
                 .services(process.env.TWILIO_VERIFY_SID)
@@ -133,7 +133,7 @@ export const getSeller = async (req, res) => {
     try {
         const { id } = req.user;
 
-        // Exclude sensitive fields
+        
         const seller = await sellerModel.findById(id).select("-password -tokens");
         if (!seller) {
             return sendNotFoundResponse(res, "Seller not found");
@@ -147,14 +147,14 @@ export const getSeller = async (req, res) => {
     }
 };
 
-//verify mobile otp while register
+
 export const verifySellerMobileOtpController = async (req, res) => {
     const COMMON_OTP = "000000";
 
     try {
         const { mobileNo, otp } = req.body;
 
-        // Validate input
+        
         if (!mobileNo && !otp) {
             return res.status(400).json({
                 success: false,
@@ -162,7 +162,7 @@ export const verifySellerMobileOtpController = async (req, res) => {
             });
         }
 
-        // Check if seller exists
+        
         const seller = await sellerModel.findOne({ mobileNo: mobileNo });
         if (seller) {
             const payload = {
@@ -183,7 +183,7 @@ export const verifySellerMobileOtpController = async (req, res) => {
             });
         }
 
-        // Twilio OTP verification
+        
         try {
             const verificationCheck = await client.verify.v2
                 .services(process.env.TWILIO_VERIFY_SID)
@@ -208,7 +208,7 @@ export const verifySellerMobileOtpController = async (req, res) => {
             console.warn("Twilio Verification Failed:", twilioError.message);
         }
 
-        // common OTP checking
+        
         if (otp === COMMON_OTP) {
             seller.verified = true;
             await seller.save();
@@ -220,7 +220,7 @@ export const verifySellerMobileOtpController = async (req, res) => {
             });
         }
 
-        // If both failed → invalid OTP
+        
         return res.status(400).json({
             success: false,
             message: "Invalid OTP"
@@ -236,7 +236,7 @@ export const verifySellerMobileOtpController = async (req, res) => {
     }
 }
 
-//login 
+
 export const sellerLoginController = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -302,7 +302,7 @@ export const sellerForgetPasswordController = async (req, res) => {
     try {
         const { email } = req.body;
 
-        // Validate input
+        
         if (!email) {
             return res.status(400).json({
                 success: false,
@@ -310,7 +310,7 @@ export const sellerForgetPasswordController = async (req, res) => {
             });
         }
 
-        // Find seller
+        
         const seller = await sellerModel.findOne({ email });
         if (!seller) {
             return res.status(404).json({
@@ -319,21 +319,21 @@ export const sellerForgetPasswordController = async (req, res) => {
             });
         }
 
-        // Generate OTP
+        
         const OTP = Math.floor(100000 + Math.random() * 900000).toString();
         const from_email = process.env.SMTP_EMAIL || "hit.kalathiyainfotech@gmail.com";
 
-        // Save OTP in DB with expiry
+        
         seller.otp = OTP;
         await seller.save();
 
-        // Also store OTP in memory (fast lookup, optional)
+        
         otpMap.set(email, {
             OTP,
             expiresAt: Date.now() + 10 * 60 * 1000
         });
 
-        // Send email
+        
         await transporter.sendMail({
             from: from_email,
             to: email,
@@ -384,7 +384,7 @@ export const sellerForgetPasswordController = async (req, res) => {
             success: true,
             message: "Forgot password OTP sent successfully!",
             toEmail: email,
-            otp: OTP // ⚠️ For testing only, remove in production
+            otp: OTP 
         });
 
     } catch (error) {
@@ -401,7 +401,7 @@ export const sellerVerifyForgetOtpController = async (req, res) => {
     try {
         const { email, otp } = req.body;
 
-        // Validate input
+        
         if (!email || !otp) {
             return res.status(400).json({
                 success: false,
@@ -409,7 +409,7 @@ export const sellerVerifyForgetOtpController = async (req, res) => {
             });
         }
 
-        // Find seller in DB
+        
         const seller = await sellerModel.findOne({ email });
         if (!seller) {
             return res.status(404).json({
@@ -418,9 +418,9 @@ export const sellerVerifyForgetOtpController = async (req, res) => {
             });
         }
 
-        // --- Case 1: Check OTP stored in DB ---
+        
         if (seller.otp && seller.otp === otp) {
-            // Clear OTP after successful verification
+            
             seller.otp = null;
             await seller.save();
 
@@ -430,7 +430,7 @@ export const sellerVerifyForgetOtpController = async (req, res) => {
             });
         }
 
-        // --- Case 2: Check OTP in memory (testing fallback) ---
+        
         const otpEntry = otpMap.get(email);
         if (otpEntry && otpEntry.expiresAt > Date.now()) {
             if (otpEntry.OTP === otp) {
@@ -448,7 +448,7 @@ export const sellerVerifyForgetOtpController = async (req, res) => {
             }
         }
 
-        // --- If neither matched ---
+        
         return res.status(400).json({
             success: false,
             message: "Invalid or expired OTP. Please request a new one."
@@ -468,7 +468,7 @@ export const sellerPasswordResetController = async (req, res) => {
     try {
         const { email, newPassword } = req.body;
 
-        //Validate input
+        
         if (!email || !newPassword) {
             return res.status(400).json({
                 success: false,
@@ -476,7 +476,7 @@ export const sellerPasswordResetController = async (req, res) => {
             });
         }
 
-        //Find user
+        
         const user = await sellerModel.findOne({ email });
         if (!user) {
             return res.status(404).json({
@@ -485,7 +485,7 @@ export const sellerPasswordResetController = async (req, res) => {
             });
         }
 
-        const hashedPassword = await bcrypt.hash(newPassword, 10); // 10 salt rounds
+        const hashedPassword = await bcrypt.hash(newPassword, 10); 
 
         user.password = hashedPassword;
         user.otp = null;
@@ -506,22 +506,22 @@ export const sellerPasswordResetController = async (req, res) => {
     }
 }
 
-//seller.kyc.controller
+
 export const sellerGstVerifyAndInsertController = async (req, res) => {
     try {
-        // Ensure user exists
+        
         if (!req?.user || !req?.user?.mobileNo) {
             return sendNotFoundResponse(res, "User not found! OPPS!");
         }
 
-        const { mobileNo } = req.user; // take mobileNo from logged-in user
+        const { mobileNo } = req.user; 
         const { gstin } = req.body;
 
         if (!gstin) {
             return sendNotFoundResponse(res, "GSTIN is required!");
         }
 
-        // GSTIN format check
+        
         function isValidGSTIN(gstin) {
             const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
             return gstRegex.test(gstin);
@@ -531,14 +531,14 @@ export const sellerGstVerifyAndInsertController = async (req, res) => {
             return sendNotFoundResponse(res, "❌ Invalid GSTIN format!");
         }
 
-        // Verify GSTIN (your utility function)
+        
         const isGSTIN = await validateGSTIN(gstin);
 
         if (!isGSTIN?.valid) {
             return sendNotFoundResponse(res, "GSTIN verification failed!");
         }
 
-        // Update seller record
+        
         await sellerModel.updateOne(
             { mobileNo: mobileNo },
             { $set: { GSTIN: gstin, verified: true } }
@@ -570,7 +570,7 @@ export const setSellerBusinessAddressController = async (req, res) => {
             return sendBadRequestResponse(res, "businessName , panNumber, businessType & businessAddr are require to Insert!");
         }
 
-        //verify Pan Number formate
+        
         function isValidPAN(panNo) {
             const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
 
@@ -586,7 +586,7 @@ export const setSellerBusinessAddressController = async (req, res) => {
             return sendNotFoundResponse(res, "seller Not Found")
         }
 
-        //insert details
+        
         const newBusinessLocation = await sellerModel.findByIdAndUpdate({ _id: id }, {
             businessName: businessName,
             panNumber: panNumber,
@@ -596,22 +596,22 @@ export const setSellerBusinessAddressController = async (req, res) => {
         await newBusinessLocation.save();
 
         try {
-            // Generate 6-digit OTP
+            
             const OTP = Math.floor(100000 + Math.random() * 900000).toString();
             const from_email = process.env.SMTP_EMAIL || "hit.kalathiyainfotech@gmail.com";
 
-            // Save OTP in DB with expiry
+            
             seller.otp = OTP;
-            seller.otpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+            seller.otpExpiry = Date.now() + 10 * 60 * 1000; 
             await seller.save();
 
-            // (Optional) Also store OTP in memory for faster lookup
+            
             otpMap.set(seller.email, {
                 OTP,
                 expiresAt: Date.now() + 10 * 60 * 1000
             });
 
-            // Send email
+            
             await transporter.sendMail({
                 from: from_email,
                 to: seller.email,
@@ -658,7 +658,7 @@ export const setSellerBusinessAddressController = async (req, res) => {
         `
             });
 
-            // ✅ Correct response message
+            
             return sendSuccessResponse(res,
                 "GST Verification OTP sent && Business Info saved successfully!",
                 {
@@ -690,25 +690,25 @@ export const verifySellerOtpController = async (req, res) => {
             return sendBadRequestResponse(res, "Email and OTP are required!");
         }
 
-        // 🔎 Find seller
+        
         const seller = await sellerModel.findOne({ email });
         if (!seller) {
             return sendNotFoundResponse(res, "Seller not found!");
         }
 
-        // 🔐 Check OTP exist
+        
         if (!seller.otp) {
             return sendBadRequestResponse(res, "No OTP found for this seller. Please request again!");
         }
 
-        // Match check
+        
         if (otp !== seller.otp) {
             return sendBadRequestResponse(res, "Invalid OTP. Please try again!");
         }
 
-        // ✅ OTP Verified → clear field
+        
         seller.otp = null;
-        seller.isVerified = true; // optional flag
+        seller.isVerified = true; 
         await seller.save();
 
         return sendSuccessResponse(res, "✅ OTP Verified Successfully!", {
@@ -726,7 +726,7 @@ export const verifySellerOtpController = async (req, res) => {
 
 export const sellerGstResetOtpController = async (req, res) => {
     try {
-        const { id } = req?.user; // or req.body.id depending on your route
+        const { id } = req?.user; 
         if (!id) {
             return sendNotFoundResponse(res, "req.user Id Not found !!")
         }
@@ -736,22 +736,22 @@ export const sellerGstResetOtpController = async (req, res) => {
             return sendNotFoundResponse(res, "Seller not found!");
         }
 
-        // Generate 6-digit OTP
+        
         const OTP = Math.floor(100000 + Math.random() * 900000).toString();
         const from_email = process.env.SMTP_EMAIL || "hit.kalathiyainfotech@gmail.com";
 
-        // Save OTP in DB with expiry
+        
         seller.otp = OTP;
-        seller.otpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+        seller.otpExpiry = Date.now() + 10 * 60 * 1000; 
         await seller.save();
 
-        // (Optional) Also store OTP in memory for faster lookup
+        
         otpMap.set(seller.email, {
             OTP,
             expiresAt: Date.now() + 10 * 60 * 1000
         });
 
-        // Send email
+        
         await transporter.sendMail({
             from: from_email,
             to: seller.email,
@@ -798,7 +798,7 @@ export const sellerGstResetOtpController = async (req, res) => {
             `
         });
 
-        // ✅ Success response
+        
         return sendSuccessResponse(res, "GST Verification OTP resent successfully!", {
             otp: OTP,
             email: seller.email
@@ -810,7 +810,7 @@ export const sellerGstResetOtpController = async (req, res) => {
     }
 };
 
-//seller.brand.info.controller.js
+
 export const sellerBrandInfoAddController = async (req, res) => {
     try {
         const { id } = req?.user;
@@ -830,7 +830,7 @@ export const sellerBrandInfoAddController = async (req, res) => {
             return sendNotFoundResponse(res, "Seller not found!");
         }
 
-        //save record
+        
         const newBrandinfo = await sellerModel.findByIdAndUpdate({ _id: id }, {
             storeName: storeName,
             ownerName: ownerName
@@ -860,7 +860,7 @@ export const sellerBankInfoSetController = async (req, res) => {
             return sendNotFoundResponse(res, "BankAcNumber & ifsc are required!");
         }
 
-        // ✅ Verify IFSC Code
+        
         try {
             const ifsc_verify_base_url = "https://ifsc.razorpay.com";
             const { data: ifscData } = await axios.get(
@@ -874,7 +874,7 @@ export const sellerBankInfoSetController = async (req, res) => {
             return sendErrorResponse(res, 400, `Invalid IFSC code: ${ifsc}`);
         }
 
-        // ✅ Verify Bank Account Number
+        
         const verifyAccountNumber = (accNo) => /^\d{9,18}$/.test(String(accNo).trim());
         const isValidBankNumber = verifyAccountNumber(BankAcNumber);
 
@@ -886,7 +886,7 @@ export const sellerBankInfoSetController = async (req, res) => {
             );
         }
 
-        // ✅ Update Seller Bank Info
+        
         const sellerBank = await sellerModel.findByIdAndUpdate(
             { _id: id },
             { BankAcNumber, ifsc: String(ifsc).toUpperCase() },
@@ -909,12 +909,12 @@ export const sellerPickUpAddressSetController = async (req, res) => {
         const { houseNo, street, landmark, pincode, city, state } = req.body;
         const { id } = req?.user || {};
 
-        // Validate user
+        
         if (!id) {
             return sendBadRequestResponse(res, "User not found in request!");
         }
 
-        // Validate address fields
+        
         if (![houseNo, street, landmark, pincode, city, state].every(field => field && field.toString().trim() !== "")) {
             return sendBadRequestResponse(
                 res,
@@ -922,7 +922,7 @@ export const sellerPickUpAddressSetController = async (req, res) => {
             );
         }
 
-        // Save pickup address
+        
         const SellerPickUpAddr = await sellerModel.findByIdAndUpdate(
             { _id: id },
             {

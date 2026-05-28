@@ -7,7 +7,7 @@ const sellerSchema = new mongoose.Schema({
     avatar: { type: String, default: null },
     otp: { type: String, default: null },
     GSTIN: { type: String, default: null },
-    verified: { type: Boolean, default: false }, //GSTIN & mobile OTP both verfi after this TRUE
+    verified: { type: Boolean, default: false }, 
     businessName: { type: String, default: null },
     panNumber: { type: String, default: null },
     businessType: { type: String, default: null },

@@ -12,7 +12,7 @@ import {
 } from "../utils/Response.utils.js";
 import { ThrowError } from "../utils/Error.utils.js";
 
-// Helper function to extract S3 key from the full URL
+
 const getS3KeyFromUrl = (url) => {
     if (!url) return null;
     const parts = url.split("amazonaws.com/");
@@ -23,7 +23,7 @@ const getS3KeyFromUrl = (url) => {
 };
 
 export class BannerController {
-    // Create new Banner
+    
     static async createBanner(req, res) {
         try {
             const { title, description, category } = req.body;
@@ -45,7 +45,7 @@ export class BannerController {
                 return sendBadRequestResponse(res, "Banner image file is required");
             }
 
-            // Upload image to S3
+            
             const uploadResult = await uploadFile(req.file);
 
             const newBanner = await BannerModel.create({
@@ -62,7 +62,7 @@ export class BannerController {
         }
     }
 
-    // Get all Banners
+    
     static async getAllBanners(req, res) {
         try {
             const banners = await BannerModel.find().populate("category");
@@ -76,7 +76,7 @@ export class BannerController {
         }
     }
 
-    // Get Banner by ID
+    
     static async getBannerById(req, res) {
         try {
             const { id } = req.params;
@@ -97,7 +97,7 @@ export class BannerController {
         }
     }
 
-    // Update Banner
+    
     static async updateBanner(req, res) {
         try {
             const { id } = req.params;
@@ -126,12 +126,12 @@ export class BannerController {
             if (title !== undefined) banner.title = title;
             if (description !== undefined) banner.description = description;
 
-            // Handle Image Upload if a new file is provided
+            
             if (req.file) {
-                // Upload new image
+                
                 const uploadResult = await uploadFile(req.file);
 
-                // Delete old image from S3 if it exists
+                
                 if (banner.image) {
                     const oldKey = getS3KeyFromUrl(banner.image);
                     if (oldKey) {
@@ -159,7 +159,7 @@ export class BannerController {
         }
     }
 
-    // Delete Banner
+    
     static async deleteBanner(req, res) {
         try {
             const { id } = req.params;
@@ -173,7 +173,7 @@ export class BannerController {
                 return sendNotFoundResponse(res, "Banner not found");
             }
 
-            // Delete image from S3
+            
             if (banner.image) {
                 const key = getS3KeyFromUrl(banner.image);
                 if (key) {

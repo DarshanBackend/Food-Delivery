@@ -8,7 +8,7 @@ import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { s3 } from "../utils/aws.config.js";
 
 
-//new product Insert
+
 export const newProductController = async (req, res) => {
     try {
         const { id } = req?.user;
@@ -29,12 +29,12 @@ export const newProductController = async (req, res) => {
             productStorage
         } = req.body;
 
-        // === Check mandatory product image ===
+        
         if (!req.file && !req.files?.productImage) {
             return sendBadRequestResponse(res, "Product image is required");
         }
 
-        // === Validations ===
+        
         if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
             return sendBadRequestResponse(res, "Invalid or missing categoryId");
         }
@@ -65,7 +65,7 @@ export const newProductController = async (req, res) => {
             return sendBadRequestResponse(res, `Invalid total unit. Allowed: ${allowedUnits.join(", ")}`);
         }
 
-        // === Parse packSizes if provided (expects JSON array) ===
+        
         let parsedPackSizes = [];
         if (packSizes) {
             try {
@@ -78,13 +78,13 @@ export const newProductController = async (req, res) => {
             }
         }
 
-        // === Check for duplicate product ===
+        
         const duplicateProduct = await productModel.findOne({
             productName: productName.trim(),
             price,
             "totalQuantity.value": totalQuantity,
             "totalQuantity.unit": totalUnit,
-            packSizes: { $eq: parsedPackSizes } // optional strict match
+            packSizes: { $eq: parsedPackSizes } 
         });
 
         if (duplicateProduct) {
@@ -94,7 +94,7 @@ export const newProductController = async (req, res) => {
             });
         }
 
-        // === Upload main product image ===
+        
         let productImg, productImgKey;
         const mainImageFile = req.files?.productImage?.[0] || req.file;
         if (mainImageFile) {
@@ -103,7 +103,7 @@ export const newProductController = async (req, res) => {
             productImgKey = result.key;
         }
 
-        // === Upload gallery images ===
+        
         let galleryImages = [];
         if (req.files?.gImage) {
             for (const file of req.files.gImage) {
@@ -112,7 +112,7 @@ export const newProductController = async (req, res) => {
             }
         }
 
-        // === Create new product ===
+        
         const newProduct = await productModel.create({
             productName: productName.trim(),
             category: categoryId,
@@ -128,12 +128,12 @@ export const newProductController = async (req, res) => {
             gImage: galleryImages,
             productHealthBenefit: productHealthBenefit || "",
             productStorage: productStorage || "",
-            inStock: totalQuantity > 0,   // automatically set inStock based on quantity
+            inStock: totalQuantity > 0,   
             soldCount: 0
         });
 
 
-        // save all product id in seller collection
+        
         await sellerModel.findByIdAndUpdate(
             { _id: id },
             { $push: { products: newProduct._id } },
@@ -157,7 +157,7 @@ export const newProductController = async (req, res) => {
     }
 };
 
-//get All products
+
 export const getAllProductsController = async (req, res) => {
     try {
         const products = await productModel.find({}).populate("category");
@@ -176,7 +176,7 @@ export const getAllProductsController = async (req, res) => {
     }
 };
 
-//update products
+
 export const updateProductController = async (req, res) => {
     try {
         const { productId } = req.params;
@@ -191,7 +191,7 @@ export const updateProductController = async (req, res) => {
             return sendErrorResponse(res, 404, "Product not found");
         }
 
-        // === Update only if seller is owner of product ===
+        
         if (product.sellerId.toString() !== sellerId.toString()) {
             return sendErrorResponse(res, 403, "You are not authorized to update this product");
         }
@@ -210,7 +210,7 @@ export const updateProductController = async (req, res) => {
             productStorage
         } = req.body;
 
-        // === Category validation if updated ===
+        
         if (categoryId) {
             if (!mongoose.Types.ObjectId.isValid(categoryId)) {
                 return sendBadRequestResponse(res, "Invalid categoryId");
@@ -230,7 +230,7 @@ export const updateProductController = async (req, res) => {
         if (productHealthBenefit) product.productHealthBenefit = productHealthBenefit;
         if (productStorage) product.productStorage = productStorage;
 
-        // === Quantity update ===
+        
         if (totalQuantity && totalUnit) {
             const allowedUnits = ["g", "kg", "ml", "l", "pc"];
             if (!allowedUnits.includes(totalUnit)) {
@@ -240,7 +240,7 @@ export const updateProductController = async (req, res) => {
             product.inStock = totalQuantity > 0;
         }
 
-        // === Parse packSizes ===
+        
         if (packSizes) {
             try {
                 const parsedPackSizes = JSON.parse(packSizes);
@@ -253,10 +253,10 @@ export const updateProductController = async (req, res) => {
             }
         }
 
-        // === Product main image update ===
+        
         const mainImageFile = req.files?.productImage?.[0] || req.file;
         if (mainImageFile) {
-            // Delete old image from S3
+            
             if (product.productImageKey) {
                 try {
                     await s3.send(new DeleteObjectCommand({
@@ -272,9 +272,9 @@ export const updateProductController = async (req, res) => {
             product.productImageKey = result.key;
         }
 
-        // === Gallery images update (replace all if provided) ===
+        
         if (req.files?.gImage && req.files.gImage.length > 0) {
-            // Delete all old gallery images
+            
             if (product.gImage && product.gImage.length > 0) {
                 for (const img of product.gImage) {
                     if (img.gImageKey) {
@@ -290,7 +290,7 @@ export const updateProductController = async (req, res) => {
                 }
             }
 
-            // Upload new gallery images
+            
             const galleryImages = [];
             for (const file of req.files.gImage) {
                 const result = await uploadFile(file);
@@ -309,24 +309,24 @@ export const updateProductController = async (req, res) => {
     }
 };
 
-//  Delete Product
+
 export const deleteProductController = async (req, res) => {
     try {
-        const { id } = req.params; // productId from params
+        const { id } = req.params; 
         const { id: sellerId } = req.user;
 
-        // Validate productId
+        
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid Product ID");
         }
 
-        // Find product
+        
         const product = await productModel.findById(id);
         if (!product) {
             return sendErrorResponse(res, 404, "Product not found");
         }
 
-        // Ensure only product owner can delete
+        
         if (product.sellerId.toString() !== sellerId.toString()) {
             return sendErrorResponse(
                 res,
@@ -335,14 +335,14 @@ export const deleteProductController = async (req, res) => {
             );
         }
 
-        // Delete main product image from S3
+        
         if (product.productImageKey) {
             try {
                 console.log("Deleting main image:", product.productImageKey);
                 await s3.send(
                     new DeleteObjectCommand({
                         Bucket: process.env.S3_BUCKET_NAME,
-                        Key: product.productImageKey, // ✅ only key, not full URL
+                        Key: product.productImageKey, 
                     })
                 );
             } catch (err) {
@@ -350,7 +350,7 @@ export const deleteProductController = async (req, res) => {
             }
         }
 
-        // Delete gallery images from S3
+        
         if (product.gImage?.length > 0) {
             for (const img of product.gImage) {
                 if (img.gImageKey) {
@@ -369,10 +369,10 @@ export const deleteProductController = async (req, res) => {
             }
         }
 
-        // Delete product from DB
+        
         await product.deleteOne();
 
-        // Remove product reference from seller collection
+        
         await sellerModel.findByIdAndUpdate(
             sellerId,
             { $pull: { products: product._id } },
@@ -386,7 +386,7 @@ export const deleteProductController = async (req, res) => {
     }
 };
 
-//get product by catgory id & short product info
+
 export const getProductByCategoryController = async (req, res) => {
     try {
         const { categoryId } = req?.params;
@@ -403,7 +403,7 @@ export const getProductByCategoryController = async (req, res) => {
             return sendBadRequestResponse("Product Not Found");
         }
 
-        // Transform response: only first packSize
+        
         const formattedProducts = products.map(product => ({
             _id: product._id,
             productName: product.productName,
@@ -416,7 +416,7 @@ export const getProductByCategoryController = async (req, res) => {
                     weight: product.packSizes[0].weight,
                     unit: product.packSizes[0].unit
                 }]
-                : [] // empty array if no packSizes
+                : [] 
         }));
 
         return sendSuccessResponse(res, "Products Fetched SuccessFully", {
@@ -430,7 +430,7 @@ export const getProductByCategoryController = async (req, res) => {
     }
 };
 
-// Get all products by Category ID (full details)
+
 export const getProductByCategoryId = async (req, res) => {
     try {
         const { categoryId } = req.params;
@@ -451,7 +451,7 @@ export const getProductByCategoryId = async (req, res) => {
     }
 };
 
-//get Product By Category
+
 export const getProductDetailController = async (req, res) => {
     try {
         const { productId } = req?.params;
@@ -479,7 +479,7 @@ export const getProductDetailController = async (req, res) => {
     }
 }
 
-//search controler by price,orinalPrice,discount,productName,catgory serach work
+
 export const searchProductController = async (req, res) => {
     try {
         const { q } = req?.query;
@@ -488,15 +488,15 @@ export const searchProductController = async (req, res) => {
             return sendErrorResponse(res, 400, "Search query is required");
         }
 
-        // Escape regex special chars
+        
         const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const regex = new RegExp(escaped, "i");
 
-        // --- Base search conditions ---
+        
         const searchConditions = [
             { productName: regex },
 
-            // price like '%q%'
+            
             {
                 $expr: {
                     $regexMatch: {
@@ -506,7 +506,7 @@ export const searchProductController = async (req, res) => {
                 }
             },
 
-            // originalPrice like '%q%'
+            
             {
                 $expr: {
                     $regexMatch: {
@@ -516,7 +516,7 @@ export const searchProductController = async (req, res) => {
                 }
             },
 
-            // discount like '%q%'
+            
             {
                 $expr: {
                     $regexMatch: {
@@ -527,14 +527,14 @@ export const searchProductController = async (req, res) => {
             }
         ];
 
-        // --- Category search ---
+        
         const categories = await CategoryModel.find({ category_name: regex }).select("_id");
         if (categories.length > 0) {
             const categoryIds = categories.map(c => c._id);
             searchConditions.push({ category: { $in: categoryIds } });
         }
 
-        // Query products
+        
         const products = await productModel.find({
             $or: searchConditions
         }).populate("category", "category_name");
@@ -550,7 +550,7 @@ export const searchProductController = async (req, res) => {
     }
 };
 
-//filter product
+
 export const filterProductController = async (req, res) => {
     try {
         let {
@@ -689,7 +689,7 @@ export const filterProductController = async (req, res) => {
     }
 };
 
-//get Pack Size By Id Controller
+
 export const getPackSizeByIdController = async (req, res) => {
     try {
         const { packSizeId } = req.params;
@@ -698,7 +698,7 @@ export const getPackSizeByIdController = async (req, res) => {
             return sendErrorResponse(res, 400, "Valid packSizeId is required");
         }
 
-        // Find product and the matching packSize
+        
         const product = await productModel.findOne(
             { "packSizes._id": packSizeId },
             { "packSizes.$": 1, productName: 1, categoryName: 1, price: 1, originalPrice: 1 }
@@ -710,7 +710,7 @@ export const getPackSizeByIdController = async (req, res) => {
 
         const packSize = product.packSizes[0];
 
-        // Merge product + packSize info
+        
         const responseData = {
             productId: product._id,
             productName: product.productName,
@@ -727,10 +727,10 @@ export const getPackSizeByIdController = async (req, res) => {
     }
 };
 
-// Get all products belonging to the 'Seasonal' category
+
 export const getSeasonalProductsController = async (req, res) => {
     try {
-        // Find category with name 'Seasonal' case-insensitively
+        
         const category = await CategoryModel.findOne({ category_name: { $regex: /^seasonal$/i } });
         if (!category) {
             return sendSuccessResponse(res, "Seasonal category not found", {
@@ -739,7 +739,7 @@ export const getSeasonalProductsController = async (req, res) => {
             });
         }
 
-        // Find products belonging to the seasonal category
+        
         const products = await productModel.find({ category: category._id }).populate("category");
 
         return sendSuccessResponse(res, "Seasonal products fetched successfully", {

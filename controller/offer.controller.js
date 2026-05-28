@@ -4,7 +4,7 @@ import offerModel from "../model/offer.model.js";
 import { s3 } from "../utils/aws.config.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 
-// Helper function to extract S3 key from the full URL
+
 const getS3KeyFromUrl = (url) => {
     if (!url) return null;
     const parts = url.split("amazonaws.com/");
@@ -14,7 +14,7 @@ const getS3KeyFromUrl = (url) => {
     return null;
 };
 
-// Create new Offer
+
 export const createOfferController = async (req, res) => {
     try {
         const {
@@ -31,14 +31,14 @@ export const createOfferController = async (req, res) => {
             return res.status(400).json({ success: false, message: "Offer image is required" });
         }
 
-        // Upload image to S3
+        
         const result = await uploadFile(req.file);
 
         const countdownData = req.body.countdown
             ? JSON.parse(req.body.countdown)
             : undefined;
 
-        // Create Offer
+        
         const newOffer = await offerModel.create({
             offerTitle,
             offerDesc,
@@ -58,7 +58,7 @@ export const createOfferController = async (req, res) => {
     }
 };
 
-// Get all Offers (Populates category)
+
 export const getAllOffersController = async (req, res) => {
     try {
         const offers = await offerModel.find({}).populate("category");
@@ -74,7 +74,7 @@ export const getAllOffersController = async (req, res) => {
     }
 };
 
-// Get Offer by ID
+
 export const getOfferByIdController = async (req, res) => {
     try {
         const { id } = req.params;
@@ -94,7 +94,7 @@ export const getOfferByIdController = async (req, res) => {
     }
 };
 
-// Update Offer
+
 export const updateOfferController = async (req, res) => {
     try {
         const { id } = req.params;
@@ -134,12 +134,12 @@ export const updateOfferController = async (req, res) => {
             }
         }
 
-        // Handle Image Upload if a new file is provided
+        
         if (req.file) {
-            // Upload new image
+            
             const result = await uploadFile(req.file);
 
-            // Delete old image from S3 if exists
+            
             if (offer.offerImage) {
                 const oldKey = getS3KeyFromUrl(offer.offerImage);
                 if (oldKey) {
@@ -165,7 +165,7 @@ export const updateOfferController = async (req, res) => {
     }
 };
 
-// Delete Offer
+
 export const deleteOfferController = async (req, res) => {
     try {
         const { id } = req.params;
@@ -178,7 +178,7 @@ export const deleteOfferController = async (req, res) => {
             return res.status(404).json({ success: false, message: "Offer not found" });
         }
 
-        // Delete image from S3
+        
         if (offer.offerImage) {
             const key = getS3KeyFromUrl(offer.offerImage);
             if (key) {
