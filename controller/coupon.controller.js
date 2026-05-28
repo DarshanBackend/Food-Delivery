@@ -5,7 +5,6 @@ import { sendBadRequestResponse, sendNotFoundResponse, sendSuccessResponse, send
 import OrderModel from "../model/order.model.js";
 import cartModel from "../model/cart.model.js";
 
-
 export const createCoupon = async (req, res) => {
     try {
         const { code, discountType, discountValue, minOrderValue, maxDiscount, expiryDate, isActive } = req.body;
@@ -56,12 +55,10 @@ export const getCouponById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid Coupon ID");
         }
 
-        
         const coupon = await CouponModel.findById(id);
         if (!coupon) {
             return sendNotFoundResponse(res, "Coupon not found!");
@@ -73,23 +70,19 @@ export const getCouponById = async (req, res) => {
     }
 };
 
-
 export const updateCoupon = async (req, res) => {
     try {
         const { id } = req.params;
 
-        
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid Coupon ID");
         }
 
-        
         const existingCoupon = await CouponModel.findById(id);
         if (!existingCoupon) {
             return sendNotFoundResponse(res, "Coupon not found!");
         }
 
-        
         const allowedUpdates = [
             "code",
             "discountType",
@@ -107,7 +100,6 @@ export const updateCoupon = async (req, res) => {
             }
         });
 
-        
         const updatedCoupon = await CouponModel.findByIdAndUpdate(id, updates, { new: true });
 
         return sendSuccessResponse(res, "Coupon updated successfully", updatedCoupon);
@@ -120,18 +112,15 @@ export const deleteCoupon = async (req, res) => {
     try {
         const { id } = req.params;
 
-        
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid Coupon ID");
         }
 
-        
         const coupon = await CouponModel.findById(id);
         if (!coupon) {
             return sendNotFoundResponse(res, "Coupon not found!");
         }
 
-        
         await CouponModel.findByIdAndDelete(id);
 
         return sendSuccessResponse(res, "Coupon deleted successfully", { deletedId: id });
@@ -149,7 +138,11 @@ export const applyCouponController = async (req, res) => {
             return sendBadRequestResponse(res, "Coupon code is required");
         }
 
-        const cart = await cartModel.findOne({ userId }).populate("items.productId");
+        const cart = await cartModel.findOne({ userId }).populate({
+            path: "items.variantId",
+            populate: { path: "productId" }
+        });
+
         if (!cart) {
             return sendNotFoundResponse(res, "Cart not found");
         }
@@ -171,17 +164,15 @@ export const applyCouponController = async (req, res) => {
         let eligibleAmount = 0;
 
         cart.items.forEach(item => {
-            const product = item.productId;
-            if (!product) return;
+            const variant = item.variantId;
+            if (!variant) return;
 
-            const selectedPack = product.packSizes?.find(
-                p => p._id.toString() === item.packSizeId.toString()
-            );
-            if (selectedPack) {
-                const itemPrice = selectedPack.price;
-                const itemTotal = itemPrice * item.quantity;
-                cartTotal += itemTotal;
+            const product = variant.productId;
+            const itemPrice = variant.price;
+            const itemTotal = itemPrice * item.quantity;
+            cartTotal += itemTotal;
 
+            if (product) {
                 if (!coupon.sellerId || (product.sellerId && product.sellerId.toString() === coupon.sellerId.toString())) {
                     eligibleAmount += itemTotal;
                 }
@@ -243,7 +234,7 @@ export const removeCouponController = async (req, res) => {
     try {
         const { id: userId } = req.user;
 
-        const cart = await cartModel.findOne({ userId }).populate("items.productId");
+        const cart = await cartModel.findOne({ userId }).populate("items.variantId");
         if (!cart) {
             return sendNotFoundResponse(res, "Cart not found");
         }
@@ -254,14 +245,9 @@ export const removeCouponController = async (req, res) => {
 
         let cartTotal = 0;
         cart.items.forEach(item => {
-            const product = item.productId;
-            if (!product) return;
-
-            const selectedPack = product.packSizes?.find(
-                p => p._id.toString() === item.packSizeId.toString()
-            );
-            if (selectedPack) {
-                cartTotal += selectedPack.price * item.quantity;
+            const variant = item.variantId;
+            if (variant) {
+                cartTotal += variant.price * item.quantity;
             }
         });
 

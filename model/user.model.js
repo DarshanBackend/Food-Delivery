@@ -63,6 +63,11 @@ const UserSchema = new mongoose.Schema({
         default: null
     },
 
+    selectedCurrency: {
+        type: String,
+        enum: ["USD", "INR", "AED", "NZD"],
+        default: "USD"
+    },
     uid: { type: String, default: null },
     avatar: { type: String, default: null },
     otp: { type: Number, default: null },

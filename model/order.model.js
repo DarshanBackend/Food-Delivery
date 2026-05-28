@@ -25,9 +25,10 @@ const orderSchema = new mongoose.Schema(
                     ref: "seller",
                     required: [true, "Seller Id is required for Order"],
                 },
-                packSizeId: {
+                variantId: {
                     type: mongoose.Types.ObjectId,
-                    required: [true, "PackSize Id is required for Order"],
+                    ref: "variant",
+                    required: [true, "Variant Id is required for Order"],
                 },
                 quantity: {
                     type: Number,
@@ -52,6 +53,7 @@ const orderSchema = new mongoose.Schema(
         discount: { type: Number, default: 0 },
         finalAmount: { type: Number, required: true, default: 0 },
         appliedCoupon: { type: String, default: null },
+        currency: { type: String, default: "USD" },
         orderStatus: { type: String, default: "Pending" },
         status: { type: String, default: "Pending" },
         paymentStatus: { type: String, default: "Pending" },

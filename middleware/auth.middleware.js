@@ -83,3 +83,22 @@ export const sellerAuth = (req, res, next) => {
     }
 };
 
+export const OptionalUserAuth = async (req, res, next) => {
+    try {
+        const token = req.header('Authorization')?.replace('Bearer ', '');
+        if (token && process.env.JWT_SECRET) {
+            try {
+                const decodedObj = jwt.verify(token, process.env.JWT_SECRET);
+                const user = await registerModel.findById(decodedObj.id);
+                if (user) {
+                    req.user = user;
+                }
+            } catch (err) {
+            }
+        }
+        next();
+    } catch (error) {
+        next();
+    }
+};
+

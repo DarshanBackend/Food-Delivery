@@ -2,10 +2,12 @@ import express from 'express';
 import { AuthController } from '../controller/auth.controller.js';
 import { newSellerController, verifySellerMobileOtpController, sellerLoginController, sellerForgetPasswordController, sellerVerifyForgetOtpController, sellerPasswordResetController, sellerGstVerifyAndInsertController, setSellerBusinessAddressController, sellerGstResetOtpController, sellerBrandInfoAddController, sellerBankInfoSetController, sellerPickUpAddressSetController, trueSellerAgreementController, getAllSeller, getSeller, verifySellerOtpController } from '../controller/seller.controller.js';
 import { CategoryController } from '../controller/category.controller.js';
-import { isAdmin, isUser, sellerAuth, UserAuth } from '../middleware/auth.middleware.js';
+import { isAdmin, isUser, sellerAuth, UserAuth, OptionalUserAuth } from '../middleware/auth.middleware.js';
 import { upload } from '../middleware/imageupload.js';
-import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController } from '../controller/profile.controller.js';
-import { deleteProductController, filterProductController, getAllProductsController, getGardenFreshProductsController, getPackSizeByIdController, getProductByCategoryController, getProductByCategoryId, getProductDetailController, getSeasonalProductsController, newProductController, searchProductController, updateProductController } from '../controller/product.controller.js';
+import { getProfileController, getSellerProfileController, getUserAddressController, userAddressAddController, userAddressDeleteController, userAddressUpdatecontroller, userPasswordChangeController, userProfileUpdateController, userRemoveAccountController, userChangeCurrencyController } from '../controller/profile.controller.js';
+import { deleteProductController, filterProductController, getAllProductsController, getGardenFreshProductsController, getProductByCategoryController, getProductByCategoryId, getProductDetailController, getSeasonalProductsController, newProductController, searchProductController, updateProductController } from '../controller/product.controller.js';
+import { createVariantController, updateVariantController, deleteVariantController, getVariantsByProductController, getVariantByIdController } from '../controller/variant.controller.js';
+import { addOrUpdateStockController, getStockByVariantController } from '../controller/stock.controller.js';
 import { addToCartController, billingSummaryController, deleteCartItemController, getMyCartController, updateCartItemController } from '../controller/cart.controller.js';
 import { BannerController } from '../controller/banner.controller.js';
 import { applyCouponController, removeCouponController, createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
@@ -55,18 +57,26 @@ indexRouter.delete("/deleteCategory/:id", UserAuth, isAdmin, CategoryController.
 
 
 
-indexRouter.post("/new/product", sellerAuth, upload.fields([{ name: "productImage", maxCount: 1 }, { name: "gImage", maxCount: 5 }]), newProductController);
-indexRouter.patch("/seller/updateProduct/:productId", sellerAuth, upload.fields([{ name: "productImage", maxCount: 1 }, { name: "gImage", maxCount: 5 }]), updateProductController);
+indexRouter.post("/new/product", sellerAuth, newProductController);
+indexRouter.patch("/seller/updateProduct/:productId", sellerAuth, updateProductController);
 indexRouter.delete("/seller/deleteProduct/:id", sellerAuth, deleteProductController);
-indexRouter.get("/all/products", getAllProductsController); 
-indexRouter.get("/get/short/productBycategory/:categoryId", getProductByCategoryController);
-indexRouter.get("/get/productBycategory/:categoryId", getProductByCategoryId);
-indexRouter.get("/seasonal/products", getSeasonalProductsController);
-indexRouter.get("/garden-fresh/products", getGardenFreshProductsController);
-indexRouter.get("/get/product/detail/:productId", getProductDetailController)
-indexRouter.get("/search", searchProductController);
-indexRouter.get("/filter", filterProductController);
-indexRouter.get("/packSize/:packSizeId", getPackSizeByIdController);
+indexRouter.get("/all/products", OptionalUserAuth, getAllProductsController); 
+indexRouter.get("/get/short/productBycategory/:categoryId", OptionalUserAuth, getProductByCategoryController);
+indexRouter.get("/get/productBycategory/:categoryId", OptionalUserAuth, getProductByCategoryId);
+indexRouter.get("/seasonal/products", OptionalUserAuth, getSeasonalProductsController);
+indexRouter.get("/garden-fresh/products", OptionalUserAuth, getGardenFreshProductsController);
+indexRouter.get("/get/product/detail/:productId", OptionalUserAuth, getProductDetailController)
+indexRouter.get("/search", OptionalUserAuth, searchProductController);
+indexRouter.get("/filter", OptionalUserAuth, filterProductController);
+
+
+indexRouter.post("/seller/variant/new/:productId", sellerAuth, upload.fields([{ name: "productImage", maxCount: 1 }, { name: "gImage", maxCount: 5 }]), createVariantController);
+indexRouter.patch("/seller/variant/update/:variantId", sellerAuth, upload.fields([{ name: "productImage", maxCount: 1 }, { name: "gImage", maxCount: 5 }]), updateVariantController);
+indexRouter.delete("/seller/variant/delete/:variantId", sellerAuth, deleteVariantController);
+indexRouter.get("/product/variants/:productId", OptionalUserAuth, getVariantsByProductController);
+indexRouter.get("/variant/:variantId", OptionalUserAuth, getVariantByIdController);
+indexRouter.post("/seller/stock/add", sellerAuth, addOrUpdateStockController);
+indexRouter.get("/seller/stock/:variantId", sellerAuth, getStockByVariantController);
 
 
 indexRouter.post("/create/banner", UserAuth, isAdmin, upload.single("bannerImage"), BannerController.createBanner);
@@ -105,6 +115,7 @@ indexRouter.post('/seller/agreement', sellerAuth, trueSellerAgreementController)
 indexRouter.get("/user/profile", UserAuth, getProfileController);
 
 indexRouter.patch("/user/profile/update", UserAuth, upload.single("avatar"), userProfileUpdateController);
+indexRouter.patch("/user/change-currency", UserAuth, userChangeCurrencyController);
 
 
 indexRouter.post("/user/address", UserAuth, userAddressAddController);

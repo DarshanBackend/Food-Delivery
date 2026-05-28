@@ -1,4 +1,3 @@
-
 import mongoose from "mongoose";
 
 const CartItemSchema = new mongoose.Schema({
@@ -7,8 +6,9 @@ const CartItemSchema = new mongoose.Schema({
         ref: "product",
         required: true,
     },
-    packSizeId: {
+    variantId: {
         type: mongoose.Schema.Types.ObjectId,
+        ref: "variant",
         required: true,
     },
     quantity: {

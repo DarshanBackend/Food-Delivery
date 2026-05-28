@@ -81,7 +81,7 @@ export const makeNewPaymentController = async (req, res) => {
                         items: {
                             $or: order.items.map((i) => ({
                                 productId: i.productId,
-                                packSizeId: i.packSizeId,
+                                variantId: i.variantId,
                             })),
                         },
                     },
@@ -170,10 +170,9 @@ export const confirmStripePaymentController = async (req, res) => {
         
         for (const item of order.items) {
             await productModel.updateOne(
-                { _id: item.productId, "packSizes._id": item.packSizeId },
+                { _id: item.productId },
                 {
                     $inc: {
-                        "packSizes.$.stock": -item.quantity,
                         "soldCount": item.quantity
                     }
                 },
@@ -246,10 +245,9 @@ export const testConfirmStripePayment = async (req, res) => {
         
         for (const item of order.items) {
             await productModel.updateOne(
-                { _id: item.productId, "packSizes._id": item.packSizeId },
+                { _id: item.productId },
                 {
                     $inc: {
-                        "packSizes.$.stock": -item.quantity,
                         "soldCount": item.quantity
                     }
                 },

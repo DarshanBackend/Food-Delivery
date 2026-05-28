@@ -33,37 +33,37 @@ export const userProfileUpdateController = async (req, res) => {
     try {
         const { id } = req?.user;
 
-        
+
         if (!id || !mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid or missing user ID from token");
         }
 
         const { name, email, mobileNo } = req.body || {};
 
-        
+
         if (!req.body || (!name && !email && !mobileNo && !req.file)) {
             return sendBadRequestResponse(res, "At least one of name, email, mobileNo, or avatar is required!");
         }
 
         let avatarUrl;
         if (req.file) {
-            
+
             const result = await uploadFile(req.file);
             avatarUrl = result.url;
         }
 
-        
+
         const updateData = {};
         if (name) updateData.name = name;
         if (email) updateData.email = email;
         if (mobileNo) updateData.mobileNo = mobileNo;
         if (avatarUrl) updateData.avatar = avatarUrl;
 
-        
+
         const updatedUser = await UserModel.findByIdAndUpdate(
             id,
             { $set: updateData },
-            { new: true } 
+            { new: true }
         );
 
         if (!updatedUser) {
@@ -82,14 +82,14 @@ export const userAddressAddController = async (req, res) => {
     try {
         const { id } = req?.user;
 
-        
+
         if (!id || !mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid User Id in Token!");
         }
 
         const { firstName, lastName, phone, email, houseNo, landmark, pincode, city, state, country, saveAs } = req?.body;
 
-        
+
         if (!firstName || !lastName || !phone || !email || !houseNo || !pincode) {
             return sendBadRequestResponse(res, "All required fields (firstName, lastName, phone, email, houseNo, pincode) must be provided!");
         }
@@ -102,7 +102,7 @@ export const userAddressAddController = async (req, res) => {
             return sendBadRequestResponse(res, "Invalid or inactive Pincode!");
         }
         let Lemail = String(email).toLowerCase();
-        
+
         const postOffice = pinData.PostOffice[0];
         const addressData = {
             firstName,
@@ -118,7 +118,7 @@ export const userAddressAddController = async (req, res) => {
             saveAs: saveAs || "Home"
         };
 
-        
+
         const updatedUser = await UserModel.findByIdAndUpdate(
             id,
             { $push: { address: addressData } },
@@ -136,9 +136,9 @@ export const userAddressAddController = async (req, res) => {
 
 export const userAddressUpdatecontroller = async (req, res) => {
     try {
-        const { id } = req?.user; 
+        const { id } = req?.user;
         const { addressId } = req?.params;
-        
+
         if (!id || !mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid User Id in Token!");
         }
@@ -157,12 +157,12 @@ export const userAddressUpdatecontroller = async (req, res) => {
             saveAs,
         } = req?.body;
 
-        
+
         if (!addressId || !mongoose.Types.ObjectId.isValid(addressId)) {
             return sendBadRequestResponse(res, "Valid addressId must be provided!");
         }
 
-        
+
         const updateFields = {};
         if (firstName) updateFields["address.$.firstName"] = firstName;
         if (lastName) updateFields["address.$.lastName"] = lastName;
@@ -176,7 +176,7 @@ export const userAddressUpdatecontroller = async (req, res) => {
         if (country) updateFields["address.$.country"] = country;
         if (saveAs) updateFields["address.$.saveAs"] = saveAs;
 
-        
+
         const updatedUser = await UserModel.findOneAndUpdate(
             { _id: id, "address._id": addressId },
             { $set: updateFields },
@@ -216,7 +216,7 @@ export const userAddressDeleteController = async (req, res) => {
             return sendBadRequestResponse(res, "address Id or Req.params Are required tO request!");
         }
 
-        
+
 
         const deleteUserAddress = await UserModel.findByIdAndUpdate(
             id,
@@ -273,19 +273,19 @@ export const userPasswordChangeController = async (req, res) => {
             return sendBadRequestResponse(res, "Old password and new password required");
         }
 
-        const user = await UserModel.findById(id).select("password"); 
+        const user = await UserModel.findById(id).select("password");
 
         if (!user) {
             return sendBadRequestResponse(res, "User not found");
         }
 
-        
+
         const isMatch = await bcrypt.compare(oldPassword, user.password);
         if (!isMatch) {
             return sendBadRequestResponse(res, "Old password is incorrect");
         }
 
-        
+
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(newPassword, salt);
 
@@ -331,7 +331,7 @@ export const getSellerProfileController = async (req, res) => {
         }
 
         const seller = await sellerModel.findById(id).select("-password");
-        
+
 
         if (!seller) {
             return sendNotFoundResponse(res, "Seller not found");
@@ -341,5 +341,36 @@ export const getSellerProfileController = async (req, res) => {
     } catch (error) {
         console.error("Error fetching seller profile:", error);
         return sendErrorResponse(res, 500, "Error fetching seller profile");
+    }
+};
+
+export const userChangeCurrencyController = async (req, res) => {
+    try {
+        const { id } = req.user;
+        const { currency } = req.body;
+
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return sendBadRequestResponse(res, "Invalid User ID");
+        }
+
+        const allowedCurrencies = ["USD", "INR", "AED", "NZD"];
+        if (!currency || !allowedCurrencies.includes(currency.toUpperCase())) {
+            return sendBadRequestResponse(res, `Invalid currency. Allowed: ${allowedCurrencies.join(", ")}`);
+        }
+
+        const user = await UserModel.findByIdAndUpdate(
+            id,
+            { selectedCurrency: currency.toUpperCase() },
+            { new: true }
+        );
+
+        if (!user) {
+            return sendNotFoundResponse(res, "User not found");
+        }
+
+        return sendSuccessResponse(res, "Currency updated successfully", { selectedCurrency: user.selectedCurrency });
+    } catch (error) {
+        console.error("Error changing currency:", error);
+        return sendErrorResponse(res, 500, "Error changing currency", error.message);
     }
 };
