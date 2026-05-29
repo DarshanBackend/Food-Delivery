@@ -27,8 +27,6 @@ const offerSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "category"
         },
-
-
         isSpecialOffer: {
             type: Boolean,
             default: false,
