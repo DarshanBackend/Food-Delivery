@@ -31,14 +31,14 @@ export const createOfferController = async (req, res) => {
             return res.status(400).json({ success: false, message: "Offer image is required" });
         }
 
-        
+
         const result = await uploadFile(req.file);
 
         const countdownData = req.body.countdown
             ? JSON.parse(req.body.countdown)
             : undefined;
 
-        
+
         const newOffer = await offerModel.create({
             offerTitle,
             offerDesc,
@@ -46,8 +46,6 @@ export const createOfferController = async (req, res) => {
             category,
             isSpecialOffer: req.body.isSpecialOffer === "true" || req.body.isSpecialOffer === true || false,
             discountPercent: Number(req.body.discountPercent) || 0,
-            headline: req.body.headline || "",
-            subText: req.body.subText || "",
             countdown: countdownData,
         });
 
@@ -134,12 +132,12 @@ export const updateOfferController = async (req, res) => {
             }
         }
 
-        
+
         if (req.file) {
-            
+
             const result = await uploadFile(req.file);
 
-            
+
             if (offer.offerImage) {
                 const oldKey = getS3KeyFromUrl(offer.offerImage);
                 if (oldKey) {
@@ -178,7 +176,7 @@ export const deleteOfferController = async (req, res) => {
             return res.status(404).json({ success: false, message: "Offer not found" });
         }
 
-        
+
         if (offer.offerImage) {
             const key = getS3KeyFromUrl(offer.offerImage);
             if (key) {

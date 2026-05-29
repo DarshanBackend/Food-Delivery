@@ -6,7 +6,7 @@ const countdownSchema = new mongoose.Schema({
     hours: { type: Number, default: 0 },
     minutes: { type: Number, default: 0 },
     seconds: { type: Number, default: 0 },
-}, { _id: false }); 
+}, { _id: false });
 
 const offerSchema = new mongoose.Schema(
     {
@@ -28,27 +28,19 @@ const offerSchema = new mongoose.Schema(
             ref: "category"
         },
 
-        
+
         isSpecialOffer: {
             type: Boolean,
-            default: false, 
+            default: false,
         },
         discountPercent: {
             type: Number,
             default: 0,
         },
-        headline: {
-            type: String,
-            trim: true,
-        },
-        subText: {
-            type: String,
-            trim: true,
-        },
         countdown: countdownSchema,
     },
     {
-        timestamps: true, 
+        timestamps: true,
     }
 );
 
