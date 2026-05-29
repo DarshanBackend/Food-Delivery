@@ -6,6 +6,8 @@ import offerModel from "../model/offer.model.js";
 import orderModel from "../model/order.model.js";
 import { sendSuccessResponse } from "../utils/Response.utils.js";
 import { ThrowError } from "../utils/Error.utils.js";
+import { getCurrencyRate } from "../utils/currency.utils.js";
+import { formatProductWithVariants } from "./product.controller.js";
 
 export class HomeController {
     static async getHomePageData(req, res) {
@@ -31,13 +33,16 @@ export class HomeController {
                             "Cauliflower"
                         ].map(name => new RegExp(`^${name}$`, 'i'))
                     }
-                }).populate("category"),
+                }).populate("category")
+                  .populate({ path: "variants", populate: { path: "stock" } }),
                 CategoryModel.findOne({ category_name: { $regex: /^seasonal$/i } }),
             ]);
 
             let seasonalProducts = [];
             if (seasonalCategory) {
-                seasonalProducts = await productModel.find({ category: seasonalCategory._id }).populate("category");
+                seasonalProducts = await productModel.find({ category: seasonalCategory._id })
+                    .populate("category")
+                    .populate({ path: "variants", populate: { path: "stock" } });
             }
 
             let topCategories = [];
@@ -97,11 +102,15 @@ export class HomeController {
                 }));
             }
 
+            const { rate, currency } = getCurrencyRate(req?.user);
+            const formattedGardenFresh = gardenFreshProducts.map(p => formatProductWithVariants(p, rate, currency));
+            const formattedSeasonal = seasonalProducts.map(p => formatProductWithVariants(p, rate, currency));
+
             return sendSuccessResponse(res, "Home page data fetched successfully", {
                 topCategories,
-                gardenFresh: gardenFreshProducts,
+                gardenFresh: formattedGardenFresh,
                 banners,
-                seasonal: seasonalProducts,
+                seasonal: formattedSeasonal,
                 offers
             });
         } catch (error) {

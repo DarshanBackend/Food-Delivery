@@ -9,9 +9,25 @@ import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { s3 } from "../utils/aws.config.js";
 import { getCurrencyRate, convertPrice } from "../utils/currency.utils.js";
 
-const formatProductWithVariants = (product, rate, currency) => {
+export const formatProductWithVariants = (product, rate, currency) => {
     const p = product.toObject();
-    if (p.variants) {
+    
+    // Check if variants is empty/missing, and map legacy packSizes if available
+    if ((!p.variants || p.variants.length === 0) && p.packSizes && p.packSizes.length > 0) {
+        p.variants = p.packSizes.map(size => {
+            return {
+                weight: size.weight,
+                unit: size.unit,
+                price: convertPrice(size.price, rate),
+                originalPrice: convertPrice(p.originalPrice || size.price, rate),
+                discount: p.discount || 0,
+                variantImage: p.productImage,
+                gImage: [],
+                stock: size.stock || 0,
+                currency: currency
+            };
+        });
+    } else if (p.variants) {
         p.variants = p.variants.map(v => {
             v.price = convertPrice(v.price, rate);
             v.originalPrice = convertPrice(v.originalPrice, rate);
@@ -20,12 +36,13 @@ const formatProductWithVariants = (product, rate, currency) => {
             return v;
         });
     }
+
     const firstVariant = p.variants?.[0] || null;
-    p.price = firstVariant ? firstVariant.price : null;
-    p.originalPrice = firstVariant ? firstVariant.originalPrice : null;
-    p.discount = firstVariant ? firstVariant.discount : 0;
-    p.productImage = firstVariant ? firstVariant.variantImage : null;
-    p.gImage = firstVariant ? firstVariant.gImage : [];
+    p.price = firstVariant ? firstVariant.price : (p.price || null);
+    p.originalPrice = firstVariant ? firstVariant.originalPrice : (p.originalPrice || null);
+    p.discount = firstVariant ? (firstVariant.discount || 0) : (p.discount || 0);
+    p.productImage = firstVariant ? (firstVariant.variantImage || p.productImage) : (p.productImage || null);
+    p.gImage = firstVariant ? (firstVariant.gImage || []) : (p.gImage || []);
     p.currency = currency;
     return p;
 };

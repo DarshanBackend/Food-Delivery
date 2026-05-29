@@ -23,7 +23,7 @@ const indexRouter = express.Router();
 
 
 
-indexRouter.get("/getHomePageData", HomeController.getHomePageData);
+indexRouter.get("/getHomePageData", OptionalUserAuth, HomeController.getHomePageData);
 
 
 indexRouter.post("/new/user", AuthController.newUserRegisterController);
