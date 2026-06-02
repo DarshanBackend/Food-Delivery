@@ -170,96 +170,33 @@ export const newOrderController = async (req, res) => {
                 }
             }
 
-            let order = await orderModel.findOne({ userId, "items.status": { $ne: "delivered" } });
-
-            if (order) {
-                order.items.push(...itemsWithSeller);
-
-                let newSubtotal = 0;
-                for (const item of order.items) {
-                    const variant = await variantModel.findById(item.variantId);
-                    if (variant) {
-                        newSubtotal += convertPrice(variant.price, rate) * item.quantity;
-                    }
-                }
-
-                let newDiscount = 0;
-                const activeCouponCode = appliedCoupon || order.appliedCoupon;
-                if (activeCouponCode) {
-                    const coupon = await CouponModel.findOne({ code: activeCouponCode.toUpperCase(), isActive: true });
-                    if (coupon && coupon.expiryDate >= new Date()) {
-                        let eligibleAmount = 0;
-                        for (const item of order.items) {
-                            const variant = await variantModel.findById(item.variantId).populate("productId");
-                            if (variant) {
-                                const price = convertPrice(variant.price || 0, rate);
-                                const itemTotal = price * item.quantity;
-
-                                if (!coupon.sellerId || (variant.productId.sellerId && variant.productId.sellerId.toString() === coupon.sellerId.toString())) {
-                                    eligibleAmount += itemTotal;
-                                }
-                            }
-                        }
-
-                        const minOrderValInCurrency = convertPrice(coupon.minOrderValue, rate);
-
-                        if (eligibleAmount >= minOrderValInCurrency) {
-                            if (coupon.discountType === "percentage") {
-                                newDiscount = (eligibleAmount * coupon.discountValue) / 100;
-                                const maxDiscountInCurrency = coupon.maxDiscount ? convertPrice(coupon.maxDiscount, rate) : null;
-                                if (maxDiscountInCurrency && newDiscount > maxDiscountInCurrency) {
-                                    newDiscount = maxDiscountInCurrency;
-                                }
-                            } else if (coupon.discountType === "flat") {
-                                newDiscount = convertPrice(coupon.discountValue, rate);
-                            }
-                            if (newDiscount > eligibleAmount) {
-                                newDiscount = eligibleAmount;
-                            }
-                            order.appliedCoupon = activeCouponCode.toUpperCase();
-                        }
-                    }
-                }
-
-                order.discount = newDiscount;
-                order.totalAmount = newSubtotal + platformFee + deliveryCharges;
-                order.finalAmount = newSubtotal - newDiscount + platformFee + deliveryCharges;
-                order.currency = currency;
-                if (!order.statusTimeline) order.statusTimeline = {};
-                if (!order.statusTimeline.confirmedAt) order.statusTimeline.confirmedAt = new Date();
-
-                await order.save();
-
-                return sendSuccessResponse(res, "Order updated successfully (items appended)", order);
-            } else {
-                let uniqueOrderId;
-                let exists = true;
-                while (exists) {
-                    uniqueOrderId = "ORD-" + Math.floor(100000 + Math.random() * 900000);
-                    const check = await orderModel.findOne({ orderId: uniqueOrderId });
-                    if (!check) exists = false;
-                }
-
-                const newOrder = await orderModel.create({
-                    orderId: uniqueOrderId,
-                    userId,
-                    items: itemsWithSeller,
-                    deliveryAddress: selectedAddress,
-                    totalAmount: subtotal + platformFee + deliveryCharges,
-                    discount,
-                    finalAmount: subtotal - discount + platformFee + deliveryCharges,
-                    appliedCoupon: appliedCoupon ? appliedCoupon.toUpperCase() : null,
-                    orderStatus: "Pending",
-                    status: "Pending",
-                    paymentStatus: "Pending",
-                    currency: currency,
-                    statusTimeline: {
-                        confirmedAt: new Date()
-                    }
-                });
-
-                return sendSuccessResponse(res, "Order placed successfully", newOrder);
+            let uniqueOrderId;
+            let exists = true;
+            while (exists) {
+                uniqueOrderId = "ORD-" + Math.floor(100000 + Math.random() * 900000);
+                const check = await orderModel.findOne({ orderId: uniqueOrderId });
+                if (!check) exists = false;
             }
+
+            const newOrder = await orderModel.create({
+                orderId: uniqueOrderId,
+                userId,
+                items: itemsWithSeller,
+                deliveryAddress: selectedAddress,
+                totalAmount: subtotal + platformFee + deliveryCharges,
+                discount,
+                finalAmount: subtotal - discount + platformFee + deliveryCharges,
+                appliedCoupon: appliedCoupon ? appliedCoupon.toUpperCase() : null,
+                orderStatus: "Pending",
+                status: "Pending",
+                paymentStatus: "Pending",
+                currency: currency,
+                statusTimeline: {
+                    confirmedAt: new Date()
+                }
+            });
+
+            return sendSuccessResponse(res, "Order placed successfully", newOrder);
 
         } catch (dbError) {
             await updateStock(items, 1);
@@ -710,8 +647,8 @@ export const cancelMyOrderController = async (req, res) => {
 
 export const sellerChangeOrderStatusController = async (req, res) => {
     try {
-        const sellerId = req?.user?.id; 
-        const { orderId, itemId } = req.params; 
+        const sellerId = req?.user?.id;
+        const { orderId, itemId } = req.params;
         const { status } = req.body;
 
         const allowedStatus = ["pending", "packing", "out for delivery", "delivered", "cancelled"];
