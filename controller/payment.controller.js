@@ -6,7 +6,9 @@ import paymentModel from "../model/payment.model.js";
 import cartModel from "../model/cart.model.js";
 import productModel from "../model/product.model.js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET);
+const stripe = new Stripe(process.env.STRIPE_SECRET, {
+    apiVersion: "2023-10-16"
+});
 
 export const makeNewPaymentController = async (req, res) => {
     try {
