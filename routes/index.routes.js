@@ -13,7 +13,7 @@ import { BannerController } from '../controller/banner.controller.js';
 import { applyCouponController, removeCouponController, createCoupon, deleteCoupon, getAllCoupon, getCouponById, updateCoupon } from '../controller/coupon.controller.js';
 import { makeNewPaymentController, confirmStripePaymentController, testConfirmStripePayment, getPaymentStatusController, verifyPayment, getAllPaymentHistory, updateRefundStatusController } from '../controller/payment.controller.js';
 import { cancelMyOrderController, deleteMyOrderController, myOrderController, newOrderController, selectUserAddressController, sellerChangeOrderStatusController, updateMyOrderController, getOrderTimelineController, getUserOrdersByStatusController } from '../controller/order.controller.js';
-import { createOfferController, getAllOffersController, getOfferByIdController, updateOfferController, deleteOfferController } from '../controller/offer.controller.js';
+import { createOfferController, getAllOffersController, getOfferByIdController, updateOfferController, deleteOfferController, getProductsByOfferCategoryController } from '../controller/offer.controller.js';
 import { ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { S3Client } from "@aws-sdk/client-s3";
 import { HomeController } from '../controller/home.controller.js';
@@ -89,6 +89,7 @@ indexRouter.delete("/deleteBanner/:id", UserAuth, isAdmin, BannerController.dele
 indexRouter.post("/seller/create/offer", sellerAuth, upload.single("offerImage"), createOfferController);
 indexRouter.get("/getAlloffers", getAllOffersController);
 indexRouter.get("/getOffersById/:id", getOfferByIdController);
+indexRouter.get("/getOfferProducts/:id", OptionalUserAuth, getProductsByOfferCategoryController);
 indexRouter.patch("/seller/update/offer/:id", sellerAuth, upload.single("offerImage"), updateOfferController);
 indexRouter.delete("/seller/delete/offer/:id", sellerAuth, deleteOfferController);
 

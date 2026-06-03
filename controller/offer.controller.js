@@ -1,6 +1,9 @@
 import mongoose from "mongoose";
 import { uploadFile } from "../middleware/imageupload.js";
 import offerModel from "../model/offer.model.js";
+import productModel from "../model/product.model.js";
+import { formatProductWithVariants } from "./product.controller.js";
+import { getCurrencyRate } from "../utils/currency.utils.js";
 import { s3 } from "../utils/aws.config.js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 
@@ -195,6 +198,42 @@ export const deleteOfferController = async (req, res) => {
         res.status(200).json({ success: true, message: "Offer deleted successfully" });
     } catch (error) {
         console.error("Delete Offer Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const getProductsByOfferCategoryController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid offer ID" });
+        }
+
+        const offer = await offerModel.findById(id);
+        if (!offer) {
+            return res.status(404).json({ success: false, message: "Offer not found" });
+        }
+
+        if (!offer.category) {
+            return res.status(400).json({ success: false, message: "This offer is not linked to any category" });
+        }
+
+        const limit = Number(req.query.limit) || 5;
+        const products = await productModel.find({ category: offer.category })
+            .populate("category")
+            .populate({ path: "variants", populate: { path: "stock" } })
+            .limit(limit);
+
+        const { rate, currency } = getCurrencyRate(req?.user);
+        const formattedProducts = products.map(p => formatProductWithVariants(p, rate, currency));
+
+        return res.status(200).json({
+            success: true,
+            count: formattedProducts.length,
+            data: formattedProducts
+        });
+    } catch (error) {
+        console.error("Get Products By Offer Category Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
