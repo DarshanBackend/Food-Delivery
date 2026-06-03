@@ -44,10 +44,13 @@ export const makeNewPaymentController = async (req, res) => {
 
         if (paymentMethod === "credit_card" || paymentMethod === "upi") {
             try {
-                
+                const stripeCurrency = paymentMethod === "upi"
+                    ? "inr"
+                    : (order.currency ? order.currency.toLowerCase() : "usd");
+
                 const paymentIntent = await stripe.paymentIntents.create({
                     amount: Math.round(amount * 100), 
-                    currency: "usd", 
+                    currency: stripeCurrency, 
                     metadata: { orderId: orderId.toString(), userId: userId.toString() },
                     payment_method_types: paymentMethod === "credit_card" ? ["card"] : ["upi"],
                 });
@@ -188,7 +191,7 @@ export const confirmStripePaymentController = async (req, res) => {
             orderStatus: order.orderStatus,
             paymentStatus: payment.paymentStatus,
             amount: payment.amount,
-            currency: "USD"
+            currency: order.currency || "USD"
         });
 
     } catch (error) {
