@@ -607,7 +607,7 @@ export const cancelMyOrderController = async (req, res) => {
 
             const payment = await paymentModel.findOne({ orderId: order._id });
             if (payment) {
-                if (payment.paymentMethod === "credit_card" || payment.paymentMethod === "upi") {
+                if (payment.paymentMethod === "credit_card") {
                     payment.refundStatus = "refund initiated";
                     order.refundStatus = "refund initiated";
 

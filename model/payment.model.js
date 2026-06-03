@@ -20,7 +20,7 @@ const paymentSchema = new mongoose.Schema({
     },
     paymentMethod: {
         type: String,
-        enum: ["credit_card", "cash_on_delivery", "upi"],
+        enum: ["credit_card", "cash_on_delivery"],
         required: true,
         default: "cash_on_delivery",
     },

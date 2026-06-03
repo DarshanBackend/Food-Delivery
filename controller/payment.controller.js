@@ -26,7 +26,7 @@ export const makeNewPaymentController = async (req, res) => {
         }
 
         
-        const allowedMethods = ["credit_card", "cash_on_delivery", "upi"];
+        const allowedMethods = ["credit_card", "cash_on_delivery"];
         if (!allowedMethods.includes(paymentMethod)) {
             return res.status(400).json({ success: false, message: `Invalid payment method. Allowed: ${allowedMethods.join(", ")}` });
         }
@@ -44,17 +44,15 @@ export const makeNewPaymentController = async (req, res) => {
         let clientSecret = null;
         let paymentStatus = "Pending";
 
-        if (paymentMethod === "credit_card" || paymentMethod === "upi") {
+        if (paymentMethod === "credit_card") {
             try {
-                const stripeCurrency = paymentMethod === "upi"
-                    ? "inr"
-                    : (order.currency ? order.currency.toLowerCase() : "usd");
+                const stripeCurrency = order.currency ? order.currency.toLowerCase() : "usd";
 
                 const paymentIntent = await stripe.paymentIntents.create({
                     amount: Math.round(amount * 100), 
                     currency: stripeCurrency, 
                     metadata: { orderId: orderId.toString(), userId: userId.toString() },
-                    payment_method_types: paymentMethod === "credit_card" ? ["card"] : ["upi"],
+                    payment_method_types: ["card"],
                 });
                 stripePaymentIntentId = paymentIntent.id;
                 clientSecret = paymentIntent.client_secret;
@@ -295,7 +293,7 @@ export const getPaymentStatusController = async (req, res) => {
             return sendNotFoundResponse(res, "Payment not found");
         }
 
-        if ((payment.paymentMethod === "credit_card" || payment.paymentMethod === "upi") && payment.paymentStatus === "Pending") {
+        if (payment.paymentMethod === "credit_card" && payment.paymentStatus === "Pending") {
             try {
                 const paymentIntent = await stripe.paymentIntents.retrieve(payment.stripePaymentIntentId);
 
