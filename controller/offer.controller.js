@@ -209,7 +209,7 @@ export const getProductsByOfferCategoryController = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid offer ID" });
         }
 
-        const offer = await offerModel.findById(id);
+        const offer = await offerModel.findById(id).populate("category");
         if (!offer) {
             return res.status(404).json({ success: false, message: "Offer not found" });
         }
@@ -219,7 +219,7 @@ export const getProductsByOfferCategoryController = async (req, res) => {
         }
 
         const limit = Number(req.query.limit) || 5;
-        const products = await productModel.find({ category: offer.category })
+        const products = await productModel.find({ category: offer.category._id || offer.category })
             .populate("category")
             .populate({ path: "variants", populate: { path: "stock" } })
             .limit(limit);
@@ -229,8 +229,12 @@ export const getProductsByOfferCategoryController = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            count: formattedProducts.length,
-            data: formattedProducts
+            data: {
+                offers: {
+                    ...offer.toObject(),
+                    products: formattedProducts
+                }
+            }
         });
     } catch (error) {
         console.error("Get Products By Offer Category Error:", error);
