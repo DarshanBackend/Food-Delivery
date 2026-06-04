@@ -68,7 +68,24 @@ export const getAllOffersController = async (req, res) => {
             return res.status(404).json({ success: false, message: "No offers found" });
         }
 
-        res.status(200).json({ success: true, count: offers.length, data: offers });
+        const { rate, currency } = getCurrencyRate(req?.user);
+
+        const offersWithProducts = await Promise.all(
+            offers.map(async (offer) => {
+                const offerObj = offer.toObject();
+                if (offer.category) {
+                    const products = await productModel.find({ category: offer.category._id || offer.category })
+                        .populate("category")
+                        .populate({ path: "variants", populate: { path: "stock" } });
+                    offerObj.products = products.map(p => formatProductWithVariants(p, rate, currency));
+                } else {
+                    offerObj.products = [];
+                }
+                return offerObj;
+            })
+        );
+
+        res.status(200).json({ success: true, count: offers.length, data: offersWithProducts });
     } catch (error) {
         console.error("Get All Offers Error:", error);
         res.status(500).json({ success: false, message: error.message });
@@ -88,7 +105,18 @@ export const getOfferByIdController = async (req, res) => {
             return res.status(404).json({ success: false, message: "Offer not found" });
         }
 
-        res.status(200).json({ success: true, data: offer });
+        const { rate, currency } = getCurrencyRate(req?.user);
+        const offerObj = offer.toObject();
+        if (offer.category) {
+            const products = await productModel.find({ category: offer.category._id || offer.category })
+                .populate("category")
+                .populate({ path: "variants", populate: { path: "stock" } });
+            offerObj.products = products.map(p => formatProductWithVariants(p, rate, currency));
+        } else {
+            offerObj.products = [];
+        }
+
+        res.status(200).json({ success: true, data: offerObj });
     } catch (error) {
         console.error("Get Offer By ID Error:", error);
         res.status(500).json({ success: false, message: error.message });

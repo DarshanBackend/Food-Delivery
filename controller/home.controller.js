@@ -34,7 +34,7 @@ export class HomeController {
                         ].map(name => new RegExp(`^${name}$`, 'i'))
                     }
                 }).populate("category")
-                  .populate({ path: "variants", populate: { path: "stock" } }),
+                    .populate({ path: "variants", populate: { path: "stock" } }),
                 CategoryModel.findOne({ category_name: { $regex: /^seasonal$/i } }),
             ]);
 
@@ -106,12 +106,27 @@ export class HomeController {
             const formattedGardenFresh = gardenFreshProducts.map(p => formatProductWithVariants(p, rate, currency));
             const formattedSeasonal = seasonalProducts.map(p => formatProductWithVariants(p, rate, currency));
 
+            const offersWithProducts = await Promise.all(
+                offers.map(async (offer) => {
+                    const offerObj = offer.toObject();
+                    if (offer.category) {
+                        const products = await productModel.find({ category: offer.category._id || offer.category })
+                            .populate("category")
+                            .populate({ path: "variants", populate: { path: "stock" } });
+                        offerObj.products = products.map(p => formatProductWithVariants(p, rate, currency));
+                    } else {
+                        offerObj.products = [];
+                    }
+                    return offerObj;
+                })
+            );
+
             return sendSuccessResponse(res, "Home page data fetched successfully", {
                 topCategories,
                 gardenFresh: formattedGardenFresh,
                 banners,
                 seasonal: formattedSeasonal,
-                offers
+                offers: offersWithProducts
             });
         } catch (error) {
             console.error("Home Page Data Fetch Error:", error.message);
