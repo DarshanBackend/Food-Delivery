@@ -62,13 +62,18 @@ export const addToCartController = async (req, res) => {
 
         await cart.save();
         await cart.populate("items.productId", "productName");
-        await cart.populate("items.variantId");
+        await cart.populate({
+            path: "items.variantId",
+            populate: { path: "stock" }
+        });
 
         const { rate, currency } = getCurrencyRate(req.user);
         let totalAmount = 0;
         const formattedItems = cart.items.map((item) => {
             const itemObj = item.toObject();
             if (itemObj.variantId) {
+                itemObj.variantId.stock = itemObj.variantId.stock ? itemObj.variantId.stock.quantity : 0;
+                itemObj.variantId.isStock = itemObj.variantId.stock > 0;
                 itemObj.variantId.price = convertPrice(itemObj.variantId.price, rate);
                 itemObj.variantId.originalPrice = convertPrice(itemObj.variantId.originalPrice, rate);
                 itemObj.variantId.currency = currency;
@@ -120,6 +125,7 @@ export const getMyCartController = async (req, res) => {
             const itemObj = item.toObject();
             if (itemObj.variantId) {
                 itemObj.variantId.stock = itemObj.variantId.stock ? itemObj.variantId.stock.quantity : 0;
+                itemObj.variantId.isStock = itemObj.variantId.stock > 0;
                 itemObj.variantId.price = convertPrice(itemObj.variantId.price, rate);
                 itemObj.variantId.originalPrice = convertPrice(itemObj.variantId.originalPrice, rate);
                 itemObj.variantId.currency = currency;
@@ -176,13 +182,18 @@ export const updateCartItemController = async (req, res) => {
 
         await cart.save();
         await cart.populate("items.productId", "productName");
-        await cart.populate("items.variantId");
+        await cart.populate({
+            path: "items.variantId",
+            populate: { path: "stock" }
+        });
 
         const { rate, currency } = getCurrencyRate(req.user);
         let totalAmount = 0;
         const formattedItems = cart.items.map((item) => {
             const itemObj = item.toObject();
             if (itemObj.variantId) {
+                itemObj.variantId.stock = itemObj.variantId.stock ? itemObj.variantId.stock.quantity : 0;
+                itemObj.variantId.isStock = itemObj.variantId.stock > 0;
                 itemObj.variantId.price = convertPrice(itemObj.variantId.price, rate);
                 itemObj.variantId.originalPrice = convertPrice(itemObj.variantId.originalPrice, rate);
                 itemObj.variantId.currency = currency;

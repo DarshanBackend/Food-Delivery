@@ -32,6 +32,13 @@ variantSchema.virtual("stock", {
     justOne: true
 });
 
+variantSchema.virtual("isStock").get(function() {
+    if (this.stock) {
+        return (this.stock.quantity || 0) > 0;
+    }
+    return false;
+});
+
 variantSchema.set("toObject", { virtuals: true, id: false });
 variantSchema.set("toJSON", { virtuals: true, id: false });
 

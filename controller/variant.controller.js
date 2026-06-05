@@ -236,6 +236,7 @@ export const getVariantsByProductController = async (req, res) => {
             obj.originalPrice = convertPrice(v.originalPrice, rate);
             obj.currency = currency;
             obj.stock = v.stock ? v.stock.quantity : 0;
+            obj.isStock = obj.stock > 0;
             return obj;
         });
 
@@ -268,6 +269,7 @@ export const getVariantByIdController = async (req, res) => {
         obj.originalPrice = convertPrice(variant.originalPrice, rate);
         obj.currency = currency;
         obj.stock = variant.stock ? variant.stock.quantity : 0;
+        obj.isStock = obj.stock > 0;
 
         return sendSuccessResponse(res, "Variant fetched successfully", obj);
     } catch (error) {

@@ -24,6 +24,7 @@ export const formatProductWithVariants = (product, rate, currency) => {
                 variantImage: p.productImage,
                 gImage: [],
                 stock: size.stock || 0,
+                isStock: (size.stock || 0) > 0,
                 currency: currency
             };
         });
@@ -33,6 +34,7 @@ export const formatProductWithVariants = (product, rate, currency) => {
             v.originalPrice = convertPrice(v.originalPrice, rate);
             v.currency = currency;
             v.stock = v.stock ? v.stock.quantity : 0;
+            v.isStock = v.stock > 0;
             return v;
         });
     }
