@@ -3,7 +3,7 @@ import variantModel from "../model/variant.model.js";
 
 export const checkStockAvailability = async (items) => {
     for (const item of items) {
-        const variantId = item.variantId.toString();
+        const variantId = (item.variantId?._id || item.variantId).toString();
         const qtyNeeded = item.quantity;
 
         const variant = await variantModel.findById(variantId).populate("productId");
@@ -26,7 +26,7 @@ export const checkStockAvailability = async (items) => {
 
 export const updateStock = async (items, direction) => {
     for (const item of items) {
-        const variantId = item.variantId.toString();
+        const variantId = (item.variantId?._id || item.variantId).toString();
         const qty = item.quantity;
 
         const stock = await stockModel.findOne({ variantId });
@@ -37,3 +37,4 @@ export const updateStock = async (items, direction) => {
         }
     }
 };
+

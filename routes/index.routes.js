@@ -60,7 +60,7 @@ indexRouter.delete("/deleteCategory/:id", UserAuth, isAdmin, CategoryController.
 indexRouter.post("/new/product", sellerAuth, newProductController);
 indexRouter.patch("/seller/updateProduct/:productId", sellerAuth, updateProductController);
 indexRouter.delete("/seller/deleteProduct/:id", sellerAuth, deleteProductController);
-indexRouter.get("/all/products", OptionalUserAuth, getAllProductsController); 
+indexRouter.get("/all/products", OptionalUserAuth, getAllProductsController);
 indexRouter.get("/get/short/productBycategory/:categoryId", OptionalUserAuth, getProductByCategoryController);
 indexRouter.get("/get/productBycategory/:categoryId", OptionalUserAuth, getProductByCategoryId);
 indexRouter.get("/seasonal/products", OptionalUserAuth, getSeasonalProductsController);
@@ -98,9 +98,9 @@ indexRouter.delete("/seller/delete/offer/:id", sellerAuth, deleteOfferController
 
 
 indexRouter.post("/seller/gst/verify", sellerAuth, sellerGstVerifyAndInsertController);
-indexRouter.post("/seller/business/address", sellerAuth, setSellerBusinessAddressController); 
+indexRouter.post("/seller/business/address", sellerAuth, setSellerBusinessAddressController);
 indexRouter.post("/seller/verify/otp", sellerAuth, verifySellerOtpController)
-indexRouter.post("/seller/gst/reset/otp", sellerAuth, sellerGstResetOtpController); 
+indexRouter.post("/seller/gst/reset/otp", sellerAuth, sellerGstResetOtpController);
 
 
 indexRouter.post("/seller/brand/info", sellerAuth, sellerBrandInfoAddController);
@@ -224,7 +224,7 @@ indexRouter.get("/listBucket", async (req, res) => {
 
 indexRouter.delete("/deleteBucketFile", async (req, res) => {
     try {
-        const { key } = req.body; 
+        const { key } = req.body;
         if (!key) return res.status(400).json({ success: false, message: "File key is required" });
 
         await s3Client.send(new DeleteObjectCommand({

@@ -38,7 +38,7 @@ export const addToCartController = async (req, res) => {
         let requestedQty = Number(quantity);
         const existingItem = cart.items.find((item) => {
             const prodId = item.productId && item.productId._id ? item.productId._id.toString() : item.productId?.toString();
-            const varId = item.variantId ? item.variantId.toString() : null;
+            const varId = item.variantId && item.variantId._id ? item.variantId._id.toString() : (item.variantId ? item.variantId.toString() : null);
             return prodId === productId && varId === variantId;
         });
 
@@ -167,7 +167,7 @@ export const updateCartItemController = async (req, res) => {
         if (!cart) return sendErrorResponse(res, 404, "Cart not found");
 
         const item = cart.items.find(
-            (i) => i.productId.toString() === productId && i.variantId.toString() === variantId
+            (i) => (i.productId?._id || i.productId).toString() === productId && (i.variantId?._id || i.variantId).toString() === variantId
         );
         if (!item) return sendErrorResponse(res, 404, "Item not found in cart");
 
